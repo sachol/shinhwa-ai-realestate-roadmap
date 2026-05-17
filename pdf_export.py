@@ -8,9 +8,30 @@ from io import BytesIO
 from pathlib import Path
 from fpdf import FPDF
 
-# Windows 시스템 폰트 경로 (대부분의 Windows에 기본 포함)
-FONT_REGULAR = Path("C:/Windows/Fonts/NanumGothic.ttf")
-FONT_BOLD = Path("C:/Windows/Fonts/NanumGothicBold.ttf")
+# 폰트 우선순위: 저장소 내 fonts/ → Windows 시스템 폰트 (로컬 개발 폴백)
+_BUNDLED = Path(__file__).parent / "fonts"
+_SYSTEM_WIN = Path("C:/Windows/Fonts")
+
+
+def _pick_font(*candidates: Path) -> Path:
+    for c in candidates:
+        if c.exists():
+            return c
+    raise FileNotFoundError(
+        f"한글 폰트를 찾을 수 없습니다. 후보: {[str(c) for c in candidates]}"
+    )
+
+
+FONT_REGULAR = _pick_font(
+    _BUNDLED / "NanumGothic.ttf",
+    _SYSTEM_WIN / "NanumGothic.ttf",
+)
+FONT_BOLD = _pick_font(
+    _BUNDLED / "NanumGothicBold.ttf",
+    _SYSTEM_WIN / "NanumGothicBold.ttf",
+    _BUNDLED / "NanumGothic.ttf",         # Bold 없으면 Regular로 폴백
+    _SYSTEM_WIN / "NanumGothic.ttf",
+)
 
 
 # NanumGothic이 렌더링하지 못하는 이모지·확장 기호 범위
