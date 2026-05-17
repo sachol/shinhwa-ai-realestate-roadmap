@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python *)",
+      "Bash(pip install *)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'chore: 신화AI부동산 공인중개사 AI 로드맵 생성기 초기 셋업 *)"
+    ]
+  }
+}
