@@ -157,6 +157,11 @@ with st.sidebar:
 
     st.divider()
     st.markdown("##### 🔐 관리자 모드")
+
+    # "관리자 모드 종료" 클릭 직후엔 비밀번호 위젯 렌더링 전에 키를 삭제해야 함
+    if st.session_state.pop("_admin_logout_request", False):
+        st.session_state.pop("admin_pw_input", None)
+
     admin_pw = st.text_input(
         "관리자 비밀번호",
         type="password",
@@ -168,6 +173,10 @@ with st.sidebar:
         st.error("비밀번호가 올바르지 않습니다.")
     if is_admin_user:
         st.success("✅ 관리자 인증됨")
+        if st.button("🚪 관리자 모드 종료", use_container_width=True, key="admin_logout_btn"):
+            # 다음 런에서 비밀번호 위젯을 초기화하도록 신호만 남기고 즉시 재실행
+            st.session_state["_admin_logout_request"] = True
+            st.rerun()
     if is_admin_using_default():
         st.info("💡 기본 비밀번호 사용 중: **shinhwa-admin**\n\n배포 전 `.streamlit/secrets.toml`에서 변경하세요.")
 
