@@ -61,5 +61,5 @@
 
 - 상태: 진행 중
 - 스킬 파일: .claude/skills/ai-roadmap-generator-for-agents/SKILL.md
-- 현재 단계: 1/7
+- 현재 단계: 5/7
 - 학습자: 노제승(sachol) — 신화AI부동산

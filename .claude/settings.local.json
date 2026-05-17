@@ -4,7 +4,17 @@
       "Bash(python *)",
       "Bash(pip install *)",
       "Bash(git add *)",
-      "Bash(git commit -m 'chore: 신화AI부동산 공인중개사 AI 로드맵 생성기 초기 셋업 *)"
+      "Bash(git commit -m 'chore: 신화AI부동산 공인중개사 AI 로드맵 생성기 초기 셋업 *)",
+      "Bash(git worktree *)",
+      "Bash(git commit -m 'feat\\(ui\\): 신화AI부동산 공인중개사 설문 UI + SQLite 응답 누적 저장 *)",
+      "Bash(git merge *)",
+      "Bash(grep -E \"\\\\.py$\")",
+      "Bash(mv app.py app.py.new)",
+      "Bash(mv pdf_export.py pdf_export.py.new)",
+      "Bash(mv -f app.py.new app.py)",
+      "Bash(mv -f pdf_export.py.new pdf_export.py)",
+      "Bash(rm -f test_*.pdf test_output.pdf)",
+      "Bash(git commit -m 'feat: 통합 app.py + PDF 보고서 다운로드 \\(한글 NanumGothic 임베딩\\) *)"
     ]
   }
 }

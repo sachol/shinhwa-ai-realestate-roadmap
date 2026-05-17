@@ -1,11 +1,14 @@
 """
-신화AI부동산 — 공인중개사 맞춤형 AI 학습 로드맵 생성기
-설문 UI 프로토타입 (feat-ui)
+신화AI부동산 — 공인중개사 맞춤형 AI 학습 로드맵 생성기 (통합본)
+설문 → 로드맵 생성 → PDF 다운로드 한 흐름
 """
 import streamlit as st
-from db import init_db, save_response, count_responses, latest_responses
+from datetime import datetime
 
-# 앱 기동 시 DB 초기화 (테이블 없으면 생성)
+from db import init_db, save_response, count_responses, latest_responses
+from roadmap_logic import generate_roadmap
+from pdf_export import build_pdf
+
 init_db()
 
 st.set_page_config(
@@ -23,7 +26,10 @@ with st.sidebar:
     st.metric(label="누적 응답 수", value=f"{total:,} 건")
 
     with st.expander("최근 응답 5건 보기"):
-        for r in latest_responses(limit=5):
+        recent = latest_responses(limit=5)
+        if not recent:
+            st.caption("_(아직 응답이 없습니다)_")
+        for r in recent:
             st.markdown(
                 f"**#{r['id']}** · {r['submitted_at']}  \n"
                 f"매물: {r['main_property']} / 숙련도: {r['ai_level']}  \n"
@@ -96,21 +102,37 @@ with st.form("survey_form"):
     )
 
 # ─────────────────────────────────────────────
-# 제출 결과 (다음 단계에서 로직 연결)
+# 제출 처리 — 로드맵 생성 + PDF 다운로드
 # ─────────────────────────────────────────────
 if submitted:
     if not ai_goals:
         st.warning("⚠️ Q2의 AI 활용 목표를 한 가지 이상 선택해주세요.")
     else:
         new_id = save_response(main_property, ai_goals, ai_level)
-        st.success(
-            f"✅ 설문이 제출되었습니다. (응답 ID #{new_id} · 누적 {count_responses()}건)"
+        st.success(f"✅ 진단 완료! (응답 ID #{new_id} · 누적 {count_responses()}건)")
+
+        # 로드맵 생성
+        roadmap_md = generate_roadmap(main_property, ai_goals, ai_level)
+
+        # 화면에 로드맵 렌더링
+        st.divider()
+        st.markdown(roadmap_md)
+
+        # PDF 변환 + 다운로드 버튼
+        st.divider()
+        with st.spinner("PDF 보고서를 만들고 있습니다..."):
+            pdf_bytes = build_pdf(roadmap_md)
+
+        filename = f"신화AI부동산_AI학습로드맵_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+        st.download_button(
+            label="📄 PDF 보고서로 저장하기",
+            data=pdf_bytes,
+            file_name=filename,
+            mime="application/pdf",
+            use_container_width=True,
+            type="primary",
         )
-        with st.expander("📋 제출된 답변 확인", expanded=True):
-            st.write(f"- **주력 매물**: {main_property}")
-            st.write(f"- **AI 활용 목표**: {', '.join(ai_goals)}")
-            st.write(f"- **AI 숙련도**: {ai_level}")
-        st.info("💡 로드맵 생성·PDF 다운로드는 6단계에서 통합됩니다.")
+        st.caption("이 PDF는 신화AI부동산이 발행한 공인중개사 전용 AI 학습 가이드입니다.")
 
 # ─────────────────────────────────────────────
 # 푸터
