@@ -52,10 +52,9 @@ BG_SOFT = "#F4F7FB"
 
 st.markdown(
     f"""
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" rel="stylesheet">
     <style>
+      @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
+
       :root {{
         --sh-primary:    {PRIMARY};
         --sh-primary-2:  #1B5BB0;
