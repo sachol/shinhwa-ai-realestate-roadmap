@@ -33,22 +33,45 @@ BG_SOFT = "#F4F7FB"   # 카드 배경
 st.markdown(
     f"""
     <style>
-      /* 기본 폰트 & 배경 */
-      .stApp {{
-        background: linear-gradient(180deg, #FAFBFD 0%, #F4F7FB 100%);
+      /* ─── 디자인 토큰 (라이트 모드 기본) ─── */
+      :root {{
+        --sh-primary:    {PRIMARY};
+        --sh-primary-2:  #1B5BB0;
+        --sh-accent:     {ACCENT};
+        --sh-card-bg:    #FFFFFF;
+        --sh-card-text:  #1B2330;
+        --sh-section-bg: {BG_SOFT};
+        --sh-section-fg: {PRIMARY};
+        --sh-muted:      #8A95A6;
+        --sh-shadow:     0 2px 10px rgba(15,61,119,0.06);
+        --sh-hero-shadow:0 10px 30px rgba(15,61,119,0.18);
+        --sh-warning:    #E04A4A;
+      }}
+      /* ─── 다크 모드 자동 적용 ─── */
+      @media (prefers-color-scheme: dark) {{
+        :root {{
+          --sh-card-bg:    #1E2733;
+          --sh-card-text:  #E8EEF7;
+          --sh-section-bg: #1A2230;
+          --sh-section-fg: #BFD3F0;    /* 다크 배경 위에서도 잘 읽히는 옅은 블루 */
+          --sh-muted:      #8E9BB0;
+          --sh-shadow:     0 2px 10px rgba(0,0,0,0.35);
+          --sh-hero-shadow:0 10px 30px rgba(0,0,0,0.45);
+          --sh-warning:    #FF7575;
+        }}
       }}
 
-      /* 히어로 영역 */
+      /* 히어로 영역 — 두 모드 공통으로 네이비 그라데이션 + 흰 글씨 */
       .hero {{
-        background: linear-gradient(135deg, {PRIMARY} 0%, #1B5BB0 100%);
-        color: white;
+        background: linear-gradient(135deg, var(--sh-primary) 0%, var(--sh-primary-2) 100%);
+        color: #FFFFFF;
         border-radius: 16px;
         padding: 28px 24px;
         margin-bottom: 18px;
-        box-shadow: 0 10px 30px rgba(15,61,119,0.18);
+        box-shadow: var(--sh-hero-shadow);
       }}
       .hero h1 {{
-        color: white !important;
+        color: #FFFFFF !important;
         margin: 0 0 6px 0 !important;
         font-size: 1.9rem !important;
       }}
@@ -59,8 +82,8 @@ st.markdown(
       }}
       .hero .pill {{
         display: inline-block;
-        background: {ACCENT};
-        color: {PRIMARY};
+        background: var(--sh-accent);
+        color: #0F3D77;
         padding: 4px 12px;
         border-radius: 999px;
         font-weight: 700;
@@ -69,62 +92,58 @@ st.markdown(
         letter-spacing: 0.3px;
       }}
 
-      /* 카드 (info / step / disclaimer) */
+      /* 카드 */
       .card {{
-        background: white;
+        background: var(--sh-card-bg);
+        color: var(--sh-card-text);
         border-radius: 14px;
         padding: 20px 22px;
         margin: 12px 0;
-        box-shadow: 0 2px 10px rgba(15,61,119,0.06);
-        border-left: 6px solid {PRIMARY};
+        box-shadow: var(--sh-shadow);
+        border-left: 6px solid var(--sh-primary);
       }}
-      .card.warning {{ border-left-color: #E04A4A; }}
-      .card.accent  {{ border-left-color: {ACCENT}; }}
+      .card.warning {{ border-left-color: var(--sh-warning); }}
+      .card.accent  {{ border-left-color: var(--sh-accent); }}
       .card h3 {{
         margin-top: 0 !important;
-        color: {PRIMARY};
+        color: var(--sh-section-fg);
         font-size: 1.15rem;
-        display: flex;
-        align-items: center;
-        gap: 8px;
+        display: flex; align-items: center; gap: 8px;
       }}
-      .card ul {{ margin: 8px 0 0 0; padding-left: 20px; }}
-      .card li {{ margin: 6px 0; line-height: 1.55; }}
+      .card ul, .card ol {{ margin: 8px 0 0 0; padding-left: 20px; }}
+      .card li {{ margin: 6px 0; line-height: 1.55; color: var(--sh-card-text); }}
+      .card b   {{ color: var(--sh-card-text); }}
 
-      /* 섹션 헤더 (설문 폼 내부) */
+      /* 섹션 헤더 (설문 내부) */
       .section-head {{
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        background: {BG_SOFT};
+        display: flex; align-items: center; gap: 10px;
+        background: var(--sh-section-bg);
         padding: 10px 14px;
         border-radius: 10px;
         margin: 18px 0 10px 0;
-        border-left: 4px solid {PRIMARY};
+        border-left: 4px solid var(--sh-primary);
       }}
       .section-head .badge {{
-        background: {PRIMARY};
-        color: white;
+        background: var(--sh-primary);
+        color: #FFFFFF;
         width: 26px; height: 26px;
         border-radius: 50%;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 700;
-        font-size: 0.85rem;
+        display: inline-flex; align-items: center; justify-content: center;
+        font-weight: 700; font-size: 0.85rem;
       }}
       .section-head .label {{
         font-weight: 700;
-        color: {PRIMARY};
+        color: var(--sh-section-fg);
         font-size: 1.02rem;
       }}
 
-      /* 일반 버튼 강조 */
+      /* 버튼 강조 (라이트/다크 공통) */
       .stButton > button[kind="primary"],
       .stDownloadButton > button[kind="primary"],
       .stFormSubmitButton > button[kind="primary"] {{
-        background: {PRIMARY} !important;
+        background: var(--sh-primary) !important;
         border: none !important;
+        color: #FFFFFF !important;
         height: 48px;
         font-weight: 700;
         letter-spacing: 0.2px;
@@ -138,7 +157,7 @@ st.markdown(
       /* 푸터 */
       .footer {{
         text-align: center;
-        color: #8A95A6;
+        color: var(--sh-muted);
         font-size: 0.82rem;
         margin-top: 20px;
       }}
