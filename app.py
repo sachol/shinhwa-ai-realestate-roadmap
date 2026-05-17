@@ -403,18 +403,14 @@ def _build_consult_message(
     return subject, body
 
 
-def _build_consult_links(subject: str, body: str) -> tuple[str, str]:
-    """Gmail 웹 컴포즈 URL과 mailto URL을 반환."""
+def _build_gmail_url(subject: str, body: str) -> str:
+    """Gmail 웹 컴포즈 URL (어떤 OS·브라우저에서도 작동)."""
     enc_subject = urllib.parse.quote(subject)
     enc_body = urllib.parse.quote(body)
-    gmail_url = (
+    return (
         f"https://mail.google.com/mail/?view=cm&fs=1"
         f"&to={CONSULT_EMAIL}&su={enc_subject}&body={enc_body}"
     )
-    mailto_url = (
-        f"mailto:{CONSULT_EMAIL}?subject={enc_subject}&body={enc_body}"
-    )
-    return gmail_url, mailto_url
 
 
 def render_selection_chips(
@@ -470,49 +466,44 @@ def render_selection_chips(
     )
 
 
-def consulting_cta(
-    gmail_url: str, mailto_url: str, subject: str, body: str
-) -> None:
-    """결과 페이지 하단의 1:1 컨설팅 신청 CTA 카드 (3가지 경로 제공)."""
+def consulting_cta(gmail_url: str, subject: str, body: str) -> None:
+    """결과 페이지 하단의 1:1 컨설팅 신청 CTA 카드.
+    Gmail 웹 작성 버튼 + 다른 메일/메신저 사용자를 위한 복사 섹션."""
     st.markdown(
         f"""
         <div class="shinhwa-cta-card">
           <span class="pill">⭐ 수강생 전용 한정 혜택</span>
           <h3>더 깊은 1:1 맞춤 컨설팅이 필요하신가요?</h3>
-          <p style="margin:0 0 16px 0; font-size:0.95rem; line-height:1.6;">
+          <p style="margin:0 0 18px 0; font-size:0.95rem; line-height:1.6;">
             진단 결과를 바탕으로 <b>주력 매물·고객층·업무 환경</b>에 꼭 맞는
             AI 자동화 설계를 받아보실 수 있습니다.<br>
             <b>수강생분께만</b> 신화AI부동산의 노하우와 시간을 우선 배정해드립니다.
           </p>
-          <div style="display:flex; flex-wrap:wrap; gap:10px;">
-            <a href="{gmail_url}" target="_blank" rel="noopener"
-               class="shinhwa-cta-btn shinhwa-cta-btn-primary">
-              <span class="btn-text">🌐 Gmail로 문의하기</span>
-            </a>
-            <a href="{mailto_url}" class="shinhwa-cta-btn">
-              <span class="btn-text">📧 기본 메일 앱으로</span>
-            </a>
-          </div>
+          <a href="{gmail_url}" target="_blank" rel="noopener"
+             class="shinhwa-cta-btn shinhwa-cta-btn-primary">
+            <span class="btn-text">🌐 Gmail로 컨설팅 문의 작성하기</span>
+          </a>
           <p class="cta-hint">
-            💡 <b style="color:#3A4250 !important;">Gmail 버튼</b>은 새 탭에서 Gmail 작성창이 열립니다(가장 확실).<br>
-            <b style="color:#3A4250 !important;">기본 메일 앱</b> 버튼이 동작하지 않으면 아래 "내용 복사하기"를 이용해주세요.
+            💡 새 탭에서 Gmail 작성창이 열립니다.
+            <b style="color:#3A4250 !important;">받는 사람·제목·본문이 자동으로 채워져</b> 있어
+            희망 일정과 다루고 싶은 주제만 추가하시면 됩니다.
           </p>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    # 폴백: 내용을 복사할 수 있는 expander
-    with st.expander("📋 메일 내용 직접 복사하기 (Naver·Daum·Outlook 등에서 사용)"):
-        st.caption(f"받는 사람")
+    # Naver/Daum/카톡 등 Gmail 외 사용자를 위한 복사 섹션
+    with st.expander("✉️ Gmail 대신 Naver·Daum·카톡 등으로 보내시려면 (내용 복사하기)"):
+        st.caption("받는 사람")
         st.code(CONSULT_EMAIL, language="text")
         st.caption("제목")
         st.code(subject, language="text")
         st.caption("본문")
         st.code(body, language="text")
         st.info(
-            "각 영역 우측 상단의 📋 복사 아이콘으로 복사하실 수 있습니다. "
-            "Naver/Daum 메일이나 카카오톡에 그대로 붙여넣어 보내주세요."
+            "각 영역 우측 상단의 **📋 복사 아이콘**을 눌러 복사하실 수 있습니다.\n\n"
+            "복사한 내용을 평소 사용하시는 **Naver·Daum 메일이나 카카오톡**에 그대로 붙여넣어 보내주세요."
         )
 
 
@@ -887,8 +878,8 @@ if submitted:
             custom_goals=custom_goals.strip(),
             ai_level=ai_level,
         )
-        gmail_url, mailto_url = _build_consult_links(subj, body_text)
-        consulting_cta(gmail_url, mailto_url, subj, body_text)
+        gmail_url = _build_gmail_url(subj, body_text)
+        consulting_cta(gmail_url, subj, body_text)
 
 st.markdown(
     '<div class="footer">© 신화AI부동산 — 공인중개사를 위한 AI 컨설팅 도구</div>',
