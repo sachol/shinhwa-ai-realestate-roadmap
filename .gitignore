@@ -5,4 +5,9 @@ venv/
 .env
 *.db
 .streamlit/secrets.toml
+.streamlit/*.json
+.streamlit/service_account*
+*service-account*.json
+*service_account*.json
+shinhwa-ai-realestate-*.json
 .bkit/

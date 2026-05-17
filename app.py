@@ -17,6 +17,7 @@ from storage import (
     latest_responses,
     all_responses,
     is_admin,
+    is_admin_using_default,
     is_sheets_active,
 )
 from roadmap_logic import (
@@ -167,6 +168,8 @@ with st.sidebar:
         st.error("비밀번호가 올바르지 않습니다.")
     if is_admin_user:
         st.success("✅ 관리자 인증됨")
+    if is_admin_using_default():
+        st.info("💡 기본 비밀번호 사용 중: **shinhwa-admin**\n\n배포 전 `.streamlit/secrets.toml`에서 변경하세요.")
 
     if st.session_state.get("consented"):
         st.divider()

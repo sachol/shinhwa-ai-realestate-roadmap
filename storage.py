@@ -177,11 +177,43 @@ def latest_responses(limit: int = 5) -> list[dict[str, Any]]:
     return rows[-limit:][::-1] if rows else []
 
 
+DEFAULT_ADMIN_PASSWORD = "shinhwa-admin"
+
+
+def get_admin_password() -> str:
+    """우선순위: st.secrets[admin][password] → 환경 변수 → 기본값."""
+    import os
+    # 1) Streamlit secrets
+    try:
+        secrets = getattr(st, "secrets", None)
+        if secrets is not None:
+            try:
+                if "admin" in secrets:
+                    admin_sec = secrets["admin"]
+                    if hasattr(admin_sec, "get"):
+                        pw = admin_sec.get("password")
+                    else:
+                        pw = admin_sec["password"] if "password" in admin_sec else None
+                    if pw:
+                        return str(pw).strip()
+            except Exception:
+                pass
+    except Exception:
+        pass
+    # 2) 환경 변수
+    env_pw = os.environ.get("SHINHWA_ADMIN_PASSWORD")
+    if env_pw:
+        return env_pw.strip()
+    # 3) 기본값
+    return DEFAULT_ADMIN_PASSWORD
+
+
 def is_admin(password: str) -> bool:
     if not password:
         return False
-    try:
-        expected = st.secrets["admin"]["password"]
-    except Exception:
-        expected = "shinhwa-admin"  # 기본값 (개발/임시용)
-    return password == expected
+    return password.strip() == get_admin_password()
+
+
+def is_admin_using_default() -> bool:
+    """관리자 비밀번호가 아직 기본값인지 여부 (배포 전 경고용)."""
+    return get_admin_password() == DEFAULT_ADMIN_PASSWORD
