@@ -20,6 +20,7 @@ from storage import (
     is_admin_using_default,
     is_sheets_active,
 )
+from notify import send_admin_notification, is_notify_active
 from roadmap_logic import (
     generate_roadmap,
     PROPERTY_OPTIONS,
@@ -153,7 +154,8 @@ with st.sidebar:
     st.caption("공인중개사 AI 학습 진단")
     st.metric(label="누적 진단 응답", value=f"{count_responses():,} 건")
     storage_label = "Google Sheets" if is_sheets_active() else "로컬 SQLite"
-    st.caption(f"📦 저장소: **{storage_label}**")
+    notify_label = "ON" if is_notify_active() else "OFF"
+    st.caption(f"📦 저장소: **{storage_label}** · ✉️ 알림: **{notify_label}**")
 
     st.divider()
     st.markdown("##### 🔐 관리자 모드")
@@ -416,6 +418,24 @@ if submitted:
             ai_level=ai_level,
         )
         st.success(f"✅ 진단 완료! (응답 ID #{new_id})")
+
+        # 강사 알림 메일 (설정 안 됐거나 실패해도 사용자 흐름엔 영향 없음)
+        try:
+            from datetime import datetime as _dt
+            send_admin_notification({
+                "id": new_id,
+                "submitted_at": _dt.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "business_name": business_name.strip(),
+                "user_name": user_name.strip(),
+                "email": email.strip(),
+                "main_property": main_property,
+                "custom_property": custom_property.strip(),
+                "ai_goals": ai_goals,
+                "custom_goals": custom_goals.strip(),
+                "ai_level": ai_level,
+            })
+        except Exception:
+            pass
 
         roadmap_md = generate_roadmap(
             business_name=business_name.strip(),
