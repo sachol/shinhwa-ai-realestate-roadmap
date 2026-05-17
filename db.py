@@ -1,5 +1,5 @@
 """
-신화AI부동산 — 공인중개사 설문 응답 누적 저장 (SQLite)
+신화AI부동산 — 공인중개사 설문 응답 누적 저장 (SQLite, 로컬 폴백용)
 """
 from __future__ import annotations
 import sqlite3
@@ -13,6 +13,7 @@ _REQUIRED_COLUMNS: dict[str, str] = {
     "submitted_at":   "TEXT NOT NULL DEFAULT ''",
     "business_name":  "TEXT NOT NULL DEFAULT ''",
     "user_name":      "TEXT NOT NULL DEFAULT ''",
+    "email":          "TEXT NOT NULL DEFAULT ''",
     "main_property":  "TEXT NOT NULL DEFAULT ''",
     "custom_property":"TEXT NOT NULL DEFAULT ''",
     "ai_goals":       "TEXT NOT NULL DEFAULT ''",
@@ -42,6 +43,7 @@ def save_response(
     *,
     business_name: str,
     user_name: str,
+    email: str,
     main_property: list[str],
     custom_property: str,
     ai_goals: list[str],
@@ -53,15 +55,16 @@ def save_response(
         cur = conn.execute(
             """
             INSERT INTO survey_responses
-                (submitted_at, business_name, user_name,
+                (submitted_at, business_name, user_name, email,
                  main_property, custom_property,
                  ai_goals, custom_goals, ai_level)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 now,
                 business_name,
                 user_name,
+                email,
                 json.dumps(main_property, ensure_ascii=False),
                 custom_property,
                 json.dumps(ai_goals, ensure_ascii=False),
@@ -82,7 +85,7 @@ def latest_responses(limit: int = 5) -> list[dict]:
     with _connect() as conn:
         rows = conn.execute(
             """
-            SELECT id, submitted_at, business_name, user_name,
+            SELECT id, submitted_at, business_name, user_name, email,
                    main_property, custom_property,
                    ai_goals, custom_goals, ai_level
             FROM survey_responses
@@ -106,9 +109,10 @@ def latest_responses(limit: int = 5) -> list[dict]:
                 "submitted_at": r["submitted_at"],
                 "business_name": r["business_name"] or "",
                 "user_name": r["user_name"] or "",
-                "main_property": mp,
+                "email": r["email"] or "",
+                "main_property": ", ".join(mp) if mp else "",
                 "custom_property": r["custom_property"] or "",
-                "ai_goals": ag,
+                "ai_goals": ", ".join(ag) if ag else "",
                 "custom_goals": r["custom_goals"] or "",
                 "ai_level": r["ai_level"] or "",
             })

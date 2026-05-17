@@ -14,7 +14,15 @@
       "Bash(mv -f app.py.new app.py)",
       "Bash(mv -f pdf_export.py.new pdf_export.py)",
       "Bash(rm -f test_*.pdf test_output.pdf)",
-      "Bash(git commit -m 'feat: 통합 app.py + PDF 보고서 다운로드 \\(한글 NanumGothic 임베딩\\) *)"
+      "Bash(git commit -m 'feat: 통합 app.py + PDF 보고서 다운로드 \\(한글 NanumGothic 임베딩\\) *)",
+      "Bash(rm -f test_v2.pdf)",
+      "Bash(git commit -m 'feat\\(v2\\): 면책조항 동의 게이트 + 사용자 정보 + 설문 대폭 확장 *)",
+      "Bash(git commit -m 'ui\\(v2.1\\): 카드 기반 디자인 + 동의 게이트 버튼 동작 개선 *)",
+      "Bash(git commit -m 'fix\\(ui\\): 다크 모드 대응 — prefers-color-scheme으로 색상 토큰 자동 전환 *)",
+      "Bash(powershell *)",
+      "Bash(rm -f responses.db)",
+      "Bash(mkdir -p .streamlit)",
+      "Bash(git commit -m 'feat\\(v3\\): 이메일 필수 + 관리자 모드 + Google Sheets 백엔드 *)"
     ]
   }
 }
