@@ -6,9 +6,13 @@
 - 저장소: Google Sheets 우선, 미설정 시 SQLite 폴백
 """
 import re
+import urllib.parse
 import pandas as pd
 import streamlit as st
 from datetime import datetime
+
+# 1:1 컨설팅 문의 수신 메일 (CTA mailto 대상)
+CONSULT_EMAIL = "sachol.cap@gmail.com"
 
 from storage import (
     init_storage,
@@ -142,6 +146,104 @@ def section_head(badge: str, label: str) -> None:
             <span class="badge">{badge}</span>
             <span class="label">{label}</span>
         </div>""",
+        unsafe_allow_html=True,
+    )
+
+
+def _build_consult_mailto(
+    business_name: str,
+    user_name: str,
+    email: str,
+    main_property: list[str],
+    custom_property: str,
+    ai_goals: list[str],
+    custom_goals: str,
+    ai_level: str,
+) -> str:
+    """수강생 정보·진단 요약이 미리 채워진 1:1 컨설팅 문의 mailto 링크 생성."""
+    subject = f"[신화AI부동산] 1:1 컨설팅 문의 — {business_name} / {user_name}"
+    body_lines = [
+        f"안녕하세요, 신화 대표님.",
+        f"",
+        f"신화AI부동산 진단을 받아본 {business_name}의 {user_name}입니다.",
+        f"진단 결과를 바탕으로, 1:1 맞춤 컨설팅을 받아보고 싶습니다.",
+        f"",
+        f"────────────────────────",
+        f"■ 제 진단 요약",
+        f"────────────────────────",
+        f"· 사업자 상호: {business_name}",
+        f"· 성함: {user_name}",
+        f"· 이메일: {email}",
+        f"· AI 숙련도: {ai_level}",
+        f"· 주력 매물: {', '.join(main_property) if main_property else '(없음)'}",
+    ]
+    if custom_property:
+        body_lines.append(f"· 기타 매물·업무: {custom_property}")
+    body_lines.append(
+        f"· AI 활용 목표: {', '.join(ai_goals) if ai_goals else '(없음)'}"
+    )
+    if custom_goals:
+        body_lines.append(f"· 기타 업무 (직접 입력): {custom_goals}")
+    body_lines += [
+        f"",
+        f"────────────────────────",
+        f"■ 컨설팅에서 다루고 싶은 내용 (자유롭게 작성)",
+        f"────────────────────────",
+        f"(여기에 구체적으로 어떤 부분을 더 깊게 다루고 싶은지 적어주세요)",
+        f"",
+        f"",
+        f"────────────────────────",
+        f"■ 희망 일정 / 연락 가능 시간",
+        f"────────────────────────",
+        f"(편하신 시간대 알려주세요)",
+        f"",
+        f"감사합니다.",
+        f"{user_name} 드림",
+    ]
+    body = "\n".join(body_lines)
+    return (
+        f"mailto:{CONSULT_EMAIL}"
+        f"?subject={urllib.parse.quote(subject)}"
+        f"&body={urllib.parse.quote(body)}"
+    )
+
+
+def consulting_cta(mailto_url: str) -> None:
+    """결과 페이지 하단의 1:1 컨설팅 신청 CTA 카드."""
+    st.markdown(
+        f"""
+        <div style="margin: 26px 0 10px 0; padding: 24px 22px;
+                    background: linear-gradient(135deg, #FFF7DE 0%, #FFE9A8 100%);
+                    border-left: 6px solid {ACCENT};
+                    border-radius: 14px;
+                    box-shadow: 0 4px 14px rgba(255,180,0,0.18);">
+          <div style="display:inline-block; background:{PRIMARY}; color:#FFF;
+                      font-size:11px; font-weight:700; letter-spacing:.4px;
+                      padding:4px 10px; border-radius:999px; margin-bottom:10px;">
+            ⭐ 수강생 전용 한정 혜택
+          </div>
+          <h3 style="margin:6px 0 4px 0; color:#0F3D77; font-size:1.25rem;">
+            더 깊은 1:1 맞춤 컨설팅이 필요하신가요?
+          </h3>
+          <p style="margin:0 0 14px 0; color:#3A4250; font-size:0.95rem; line-height:1.6;">
+            진단 결과를 바탕으로 <b>주력 매물·고객층·업무 환경</b>에 꼭 맞는
+            AI 자동화 설계를 받아보실 수 있습니다.<br>
+            <b>수강생분께만</b> 신화AI부동산의 노하우와 시간을 우선 배정해드립니다.
+          </p>
+          <a href="{mailto_url}"
+             style="display:inline-block; background:{PRIMARY}; color:#FFF !important;
+                    text-decoration:none; padding:12px 22px; border-radius:10px;
+                    font-weight:700; font-size:0.97rem;
+                    box-shadow: 0 3px 10px rgba(15,61,119,0.25);">
+            📧 신화 대표에게 컨설팅 문의하기
+          </a>
+          <p style="margin:14px 0 0 0; color:#6B7686; font-size:11.5px; line-height:1.5;">
+            💡 버튼을 누르시면 메일 앱이 열리며,
+            <b>진단 요약이 자동으로 본문에 채워집니다.</b>
+            희망 일정과 다루고 싶은 주제만 추가로 적어 보내주세요.
+          </p>
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 
@@ -494,6 +596,18 @@ if submitted:
                     "ℹ️ 이메일 발송이 일시적으로 지연되고 있습니다. "
                     "위의 **'PDF 보고서로 저장하기'** 버튼으로 직접 받아두시면 됩니다."
                 )
+
+        # 1:1 컨설팅 신청 CTA
+        consulting_cta(_build_consult_mailto(
+            business_name=business_name.strip(),
+            user_name=user_name.strip(),
+            email=email.strip(),
+            main_property=main_property,
+            custom_property=custom_property.strip(),
+            ai_goals=ai_goals,
+            custom_goals=custom_goals.strip(),
+            ai_level=ai_level,
+        ))
 
 st.markdown(
     '<div class="footer">© 신화AI부동산 — 공인중개사를 위한 AI 컨설팅 도구</div>',
