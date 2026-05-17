@@ -7,9 +7,11 @@
 """
 import re
 import urllib.parse
+from collections import Counter
+from datetime import datetime, timedelta
+
 import pandas as pd
 import streamlit as st
-from datetime import datetime
 
 # 1:1 컨설팅 문의 수신 메일 (CTA mailto 대상)
 CONSULT_EMAIL = "sachol.cap@gmail.com"
@@ -363,6 +365,145 @@ def section_head(badge: str, label: str) -> None:
     )
 
 
+# ─────────────────────────────────────────────
+# 관리자 통계 헬퍼
+# ─────────────────────────────────────────────
+_LEVEL_NUM_RE = re.compile(r"^\s*(\d+)")
+
+
+def _split_multivalue(value) -> list[str]:
+    """저장소가 SQLite(list) / Sheets(콤마 문자열) 어느 쪽이든 안전하게 list로 변환."""
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(v).strip() for v in value if str(v).strip()]
+    s = str(value).strip()
+    if not s:
+        return []
+    # JSON 리스트로 저장된 경우도 처리
+    if s.startswith("[") and s.endswith("]"):
+        import json
+        try:
+            parsed = json.loads(s)
+            if isinstance(parsed, list):
+                return [str(v).strip() for v in parsed if str(v).strip()]
+        except Exception:
+            pass
+    return [p.strip() for p in s.split(",") if p.strip()]
+
+
+def _level_to_number(level_str: str) -> int | None:
+    if not level_str:
+        return None
+    m = _LEVEL_NUM_RE.match(str(level_str))
+    return int(m.group(1)) if m else None
+
+
+def render_admin_dashboard(rows: list[dict]) -> None:
+    """관리자 대시보드 — KPI 4타일 + 4개 차트."""
+    if not rows:
+        st.info("아직 응답이 없습니다. 진단이 1건이라도 쌓이면 통계가 표시됩니다.")
+        return
+
+    df = pd.DataFrame(rows)
+
+    # ── 다중값 컬럼 정규화 ──
+    df["_props"] = df.get("main_property", "").apply(_split_multivalue)
+    df["_goals"] = df.get("ai_goals", "").apply(_split_multivalue)
+    df["_level_num"] = df.get("ai_level", "").apply(_level_to_number)
+    df["_submitted_dt"] = pd.to_datetime(
+        df.get("submitted_at", ""), errors="coerce"
+    )
+
+    # ── KPI 계산 ──
+    total = len(df)
+    now = datetime.now()
+    week_ago = now - timedelta(days=7)
+    recent_week = int((df["_submitted_dt"] >= week_ago).sum())
+
+    avg_level = df["_level_num"].dropna().mean()
+    avg_level_str = f"{avg_level:.1f} / 5" if pd.notna(avg_level) else "—"
+
+    all_props = [p for lst in df["_props"] for p in lst]
+    top_property = Counter(all_props).most_common(1)
+    top_prop_label = top_property[0][0] if top_property else "—"
+
+    # ── KPI 타일 ──
+    st.markdown("### 📊 핵심 지표")
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("총 응답", f"{total:,} 건")
+    k2.metric("최근 7일", f"{recent_week:,} 건")
+    k3.metric("평균 숙련도", avg_level_str)
+    k4.metric("Top 매물", top_prop_label)
+
+    st.divider()
+
+    # ── 차트 행: 매물 분포 + AI 목표 분포 ──
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("#### 🏠 주력 매물 분포 (복수응답)")
+        prop_counts = Counter(all_props)
+        if prop_counts:
+            prop_df = pd.DataFrame(
+                prop_counts.most_common(),
+                columns=["매물", "응답 수"],
+            ).set_index("매물")
+            st.bar_chart(prop_df, height=320, color="#0F3D77")
+        else:
+            st.caption("_(데이터 부족)_")
+
+    with c2:
+        st.markdown("#### 🎯 AI 활용 목표 Top (복수응답)")
+        all_goals = [g for lst in df["_goals"] for g in lst]
+        goal_counts = Counter(all_goals)
+        if goal_counts:
+            goal_df = pd.DataFrame(
+                goal_counts.most_common(10),
+                columns=["목표", "응답 수"],
+            ).set_index("목표")
+            st.bar_chart(goal_df, height=320, color="#FFB400")
+        else:
+            st.caption("_(데이터 부족)_")
+
+    st.divider()
+
+    # ── 차트 행: 숙련도 분포 + 일별 추이 ──
+    c3, c4 = st.columns(2)
+    with c3:
+        st.markdown("#### 📚 AI 숙련도 분포")
+        level_series = df["ai_level"].dropna()
+        level_series = level_series[level_series.str.strip() != ""]
+        if not level_series.empty:
+            level_df = (
+                level_series.value_counts()
+                .rename_axis("숙련도")
+                .reset_index(name="응답 수")
+                .sort_values("숙련도")
+                .set_index("숙련도")
+            )
+            st.bar_chart(level_df, height=320, color="#1B5BB0")
+        else:
+            st.caption("_(데이터 부족)_")
+
+    with c4:
+        st.markdown("#### 📈 일별 응답 추이")
+        dt_series = df["_submitted_dt"].dropna()
+        if not dt_series.empty:
+            daily = (
+                dt_series.dt.floor("D")
+                .value_counts()
+                .sort_index()
+                .rename_axis("날짜")
+                .reset_index(name="응답 수")
+                .set_index("날짜")
+            )
+            st.line_chart(daily, height=320, color="#0F3D77")
+        else:
+            st.caption("_(데이터 부족)_")
+
+    st.divider()
+
+
 def _build_consult_message(
     business_name: str,
     user_name: str,
@@ -556,17 +697,21 @@ with st.sidebar:
 if is_admin_user:
     hero(
         title="관리자 대시보드",
-        subtitle="모든 응답을 조회하고 CSV로 다운로드할 수 있습니다.",
+        subtitle="모든 응답을 조회하고 통계를 확인할 수 있습니다.",
         pill="ADMIN",
     )
 
     rows = all_responses()
+
+    # 통계 위젯
+    render_admin_dashboard(rows)
+
+    # 전체 응답 테이블
     st.markdown(f"### 📋 전체 응답 ({len(rows)}건)")
     if not rows:
         st.info("아직 응답이 없습니다.")
     else:
         df = pd.DataFrame(rows)
-        # 보기 좋게 컬럼 순서 정렬
         preferred = [
             "id", "submitted_at", "business_name", "user_name", "email",
             "ai_level", "main_property", "custom_property",
