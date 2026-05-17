@@ -326,6 +326,19 @@ st.markdown(
       a.shinhwa-cta-btn span.btn-text {{
         color: inherit !important;
       }}
+      /* Primary 액션 (Gmail) — 채워진 네이비 */
+      a.shinhwa-cta-btn-primary,
+      a.shinhwa-cta-btn-primary:link,
+      a.shinhwa-cta-btn-primary:visited,
+      .stMarkdown a.shinhwa-cta-btn-primary {{
+        background: #0F3D77 !important;
+        color: #FFFFFF !important;
+        border-color: #0F3D77 !important;
+      }}
+      a.shinhwa-cta-btn-primary:hover {{
+        background: #0a2c5a !important;
+        color: #FFFFFF !important;
+      }}
     </style>
     """,
     unsafe_allow_html=True,
@@ -350,7 +363,7 @@ def section_head(badge: str, label: str) -> None:
     )
 
 
-def _build_consult_mailto(
+def _build_consult_message(
     business_name: str,
     user_name: str,
     email: str,
@@ -359,53 +372,49 @@ def _build_consult_mailto(
     ai_goals: list[str],
     custom_goals: str,
     ai_level: str,
-) -> str:
-    """수강생 정보·진단 요약이 미리 채워진 1:1 컨설팅 문의 mailto 링크 생성."""
+) -> tuple[str, str]:
+    """1:1 컨설팅 문의 메일의 (제목, 본문)을 반환.
+    본문은 URL 길이 제한을 고려해 핵심만 간결하게 작성."""
     subject = f"[신화AI부동산] 1:1 컨설팅 문의 — {business_name} / {user_name}"
-    body_lines = [
-        f"안녕하세요, 신화 대표님.",
-        f"",
-        f"신화AI부동산 진단을 받아본 {business_name}의 {user_name}입니다.",
-        f"진단 결과를 바탕으로, 1:1 맞춤 컨설팅을 받아보고 싶습니다.",
-        f"",
-        f"────────────────────────",
-        f"■ 제 진단 요약",
-        f"────────────────────────",
-        f"· 사업자 상호: {business_name}",
-        f"· 성함: {user_name}",
-        f"· 이메일: {email}",
-        f"· AI 숙련도: {ai_level}",
-        f"· 주력 매물: {', '.join(main_property) if main_property else '(없음)'}",
-    ]
+
+    props = ", ".join(main_property) if main_property else "(없음)"
     if custom_property:
-        body_lines.append(f"· 기타 매물·업무: {custom_property}")
-    body_lines.append(
-        f"· AI 활용 목표: {', '.join(ai_goals) if ai_goals else '(없음)'}"
-    )
+        props += f" / {custom_property}"
+    goals = ", ".join(ai_goals) if ai_goals else "(없음)"
     if custom_goals:
-        body_lines.append(f"· 기타 업무 (직접 입력): {custom_goals}")
-    body_lines += [
-        f"",
-        f"────────────────────────",
-        f"■ 컨설팅에서 다루고 싶은 내용 (자유롭게 작성)",
-        f"────────────────────────",
-        f"(여기에 구체적으로 어떤 부분을 더 깊게 다루고 싶은지 적어주세요)",
-        f"",
-        f"",
-        f"────────────────────────",
-        f"■ 희망 일정 / 연락 가능 시간",
-        f"────────────────────────",
-        f"(편하신 시간대 알려주세요)",
-        f"",
-        f"감사합니다.",
-        f"{user_name} 드림",
-    ]
-    body = "\n".join(body_lines)
-    return (
-        f"mailto:{CONSULT_EMAIL}"
-        f"?subject={urllib.parse.quote(subject)}"
-        f"&body={urllib.parse.quote(body)}"
+        goals += f" / {custom_goals}"
+
+    body = (
+        f"안녕하세요, 신화 대표님.\n\n"
+        f"신화AI부동산 진단을 받은 {business_name}의 {user_name}입니다.\n"
+        f"1:1 맞춤 컨설팅을 받아보고 싶습니다.\n\n"
+        f"■ 제 진단 요약\n"
+        f"· 사업자 상호: {business_name}\n"
+        f"· 이메일: {email}\n"
+        f"· AI 숙련도: {ai_level}\n"
+        f"· 주력 매물: {props}\n"
+        f"· AI 관심 업무: {goals}\n\n"
+        f"■ 컨설팅에서 다루고 싶은 내용\n"
+        f"(자유롭게 작성)\n\n"
+        f"■ 희망 일정 / 연락 가능 시간\n"
+        f"(편하신 시간대 알려주세요)\n\n"
+        f"감사합니다.\n{user_name} 드림"
     )
+    return subject, body
+
+
+def _build_consult_links(subject: str, body: str) -> tuple[str, str]:
+    """Gmail 웹 컴포즈 URL과 mailto URL을 반환."""
+    enc_subject = urllib.parse.quote(subject)
+    enc_body = urllib.parse.quote(body)
+    gmail_url = (
+        f"https://mail.google.com/mail/?view=cm&fs=1"
+        f"&to={CONSULT_EMAIL}&su={enc_subject}&body={enc_body}"
+    )
+    mailto_url = (
+        f"mailto:{CONSULT_EMAIL}?subject={enc_subject}&body={enc_body}"
+    )
+    return gmail_url, mailto_url
 
 
 def render_selection_chips(
@@ -461,8 +470,10 @@ def render_selection_chips(
     )
 
 
-def consulting_cta(mailto_url: str) -> None:
-    """결과 페이지 하단의 1:1 컨설팅 신청 CTA 카드."""
+def consulting_cta(
+    gmail_url: str, mailto_url: str, subject: str, body: str
+) -> None:
+    """결과 페이지 하단의 1:1 컨설팅 신청 CTA 카드 (3가지 경로 제공)."""
     st.markdown(
         f"""
         <div class="shinhwa-cta-card">
@@ -473,18 +484,36 @@ def consulting_cta(mailto_url: str) -> None:
             AI 자동화 설계를 받아보실 수 있습니다.<br>
             <b>수강생분께만</b> 신화AI부동산의 노하우와 시간을 우선 배정해드립니다.
           </p>
-          <a href="{mailto_url}" class="shinhwa-cta-btn">
-            <span class="btn-text">📧 신화 대표에게 컨설팅 문의하기</span>
-          </a>
+          <div style="display:flex; flex-wrap:wrap; gap:10px;">
+            <a href="{gmail_url}" target="_blank" rel="noopener"
+               class="shinhwa-cta-btn shinhwa-cta-btn-primary">
+              <span class="btn-text">🌐 Gmail로 문의하기</span>
+            </a>
+            <a href="{mailto_url}" class="shinhwa-cta-btn">
+              <span class="btn-text">📧 기본 메일 앱으로</span>
+            </a>
+          </div>
           <p class="cta-hint">
-            💡 버튼을 누르시면 메일 앱이 열리며,
-            <b style="color:#3A4250 !important;">진단 요약이 자동으로 본문에 채워집니다.</b>
-            희망 일정과 다루고 싶은 주제만 추가로 적어 보내주세요.
+            💡 <b style="color:#3A4250 !important;">Gmail 버튼</b>은 새 탭에서 Gmail 작성창이 열립니다(가장 확실).<br>
+            <b style="color:#3A4250 !important;">기본 메일 앱</b> 버튼이 동작하지 않으면 아래 "내용 복사하기"를 이용해주세요.
           </p>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+    # 폴백: 내용을 복사할 수 있는 expander
+    with st.expander("📋 메일 내용 직접 복사하기 (Naver·Daum·Outlook 등에서 사용)"):
+        st.caption(f"받는 사람")
+        st.code(CONSULT_EMAIL, language="text")
+        st.caption("제목")
+        st.code(subject, language="text")
+        st.caption("본문")
+        st.code(body, language="text")
+        st.info(
+            "각 영역 우측 상단의 📋 복사 아이콘으로 복사하실 수 있습니다. "
+            "Naver/Daum 메일이나 카카오톡에 그대로 붙여넣어 보내주세요."
+        )
 
 
 # ─────────────────────────────────────────────
@@ -847,8 +876,8 @@ if submitted:
                     "위의 **'PDF 보고서로 저장하기'** 버튼으로 직접 받아두시면 됩니다."
                 )
 
-        # 1:1 컨설팅 신청 CTA
-        consulting_cta(_build_consult_mailto(
+        # 1:1 컨설팅 신청 CTA — Gmail 웹 + mailto + 복사 폴백 3종
+        subj, body_text = _build_consult_message(
             business_name=business_name.strip(),
             user_name=user_name.strip(),
             email=email.strip(),
@@ -857,7 +886,9 @@ if submitted:
             ai_goals=ai_goals,
             custom_goals=custom_goals.strip(),
             ai_level=ai_level,
-        ))
+        )
+        gmail_url, mailto_url = _build_consult_links(subj, body_text)
+        consulting_cta(gmail_url, mailto_url, subj, body_text)
 
 st.markdown(
     '<div class="footer">© 신화AI부동산 — 공인중개사를 위한 AI 컨설팅 도구</div>',
