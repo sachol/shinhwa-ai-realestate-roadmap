@@ -20,7 +20,7 @@ from storage import (
     is_admin_using_default,
     is_sheets_active,
 )
-from notify import send_admin_notification, is_notify_active
+from notify import send_admin_notification, send_student_pdf, is_notify_active
 from roadmap_logic import (
     generate_roadmap,
     PROPERTY_OPTIONS,
@@ -421,10 +421,9 @@ if submitted:
 
         # 강사 알림 메일 (설정 안 됐거나 실패해도 사용자 흐름엔 영향 없음)
         try:
-            from datetime import datetime as _dt
             send_admin_notification({
                 "id": new_id,
-                "submitted_at": _dt.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "submitted_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "business_name": business_name.strip(),
                 "user_name": user_name.strip(),
                 "email": email.strip(),
@@ -468,6 +467,33 @@ if submitted:
             "이 PDF는 신화AI부동산이 발행한 공인중개사 전용 AI 학습 가이드입니다. "
             "면책 조항은 첫 화면 안내와 동일하게 적용됩니다."
         )
+
+        # 수강생 본인 이메일로 PDF 자동 발송
+        student_payload = {
+            "id": new_id,
+            "submitted_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "business_name": business_name.strip(),
+            "user_name": user_name.strip(),
+            "email": email.strip(),
+            "main_property": main_property,
+            "custom_property": custom_property.strip(),
+            "ai_goals": ai_goals,
+            "custom_goals": custom_goals.strip(),
+            "ai_level": ai_level,
+        }
+        if is_notify_active():
+            with st.spinner(f"📧 {email.strip()} 주소로 결과 PDF를 보내드리고 있습니다..."):
+                sent = send_student_pdf(student_payload, pdf_bytes, filename)
+            if sent:
+                st.success(
+                    f"📬 입력하신 이메일 **{email.strip()}** 로 진단 결과 PDF를 발송했습니다.\n\n"
+                    f"메일이 안 보이시면 **스팸함**을 한 번 확인해주세요."
+                )
+            else:
+                st.info(
+                    "ℹ️ 이메일 발송이 일시적으로 지연되고 있습니다. "
+                    "위의 **'PDF 보고서로 저장하기'** 버튼으로 직접 받아두시면 됩니다."
+                )
 
 st.markdown(
     '<div class="footer">© 신화AI부동산 — 공인중개사를 위한 AI 컨설팅 도구</div>',
