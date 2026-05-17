@@ -52,6 +52,9 @@ BG_SOFT = "#F4F7FB"
 
 st.markdown(
     f"""
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" rel="stylesheet">
     <style>
       :root {{
         --sh-primary:    {PRIMARY};
@@ -63,8 +66,11 @@ st.markdown(
         --sh-section-fg: {PRIMARY};
         --sh-muted:      #8A95A6;
         --sh-shadow:     0 2px 10px rgba(15,61,119,0.06);
-        --sh-hero-shadow:0 10px 30px rgba(15,61,119,0.18);
+        --sh-hero-shadow:0 12px 32px rgba(15,61,119,0.22);
         --sh-warning:    #E04A4A;
+        --sh-input-bg:   #FFFFFF;
+        --sh-input-bd:   #DDE3EC;
+        --sh-input-fg:   #1B2330;
       }}
       @media (prefers-color-scheme: dark) {{
         :root {{
@@ -74,58 +80,193 @@ st.markdown(
           --sh-section-fg: #BFD3F0;
           --sh-muted:      #8E9BB0;
           --sh-shadow:     0 2px 10px rgba(0,0,0,0.35);
-          --sh-hero-shadow:0 10px 30px rgba(0,0,0,0.45);
+          --sh-hero-shadow:0 12px 32px rgba(0,0,0,0.55);
           --sh-warning:    #FF7575;
+          --sh-input-bg:   #232C39;
+          --sh-input-bd:   #2E3A4A;
+          --sh-input-fg:   #E8EEF7;
         }}
       }}
-      .hero {{
-        background: linear-gradient(135deg, var(--sh-primary) 0%, var(--sh-primary-2) 100%);
-        color: #FFFFFF;
-        border-radius: 16px;
-        padding: 28px 24px;
-        margin-bottom: 18px;
-        box-shadow: var(--sh-hero-shadow);
+
+      /* Pretendard 전역 적용 */
+      html, body, .stApp, [class*="css"] {{
+        font-family: 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo',
+                     'Malgun Gothic', system-ui, -apple-system, sans-serif !important;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        letter-spacing: -0.01em;
       }}
-      .hero h1 {{ color: #FFF !important; margin: 0 0 6px 0 !important; font-size: 1.9rem !important; }}
-      .hero p  {{ color: rgba(255,255,255,0.92); margin: 0; font-size: 1rem; }}
+
+      /* 부드러운 진입 애니메이션 */
+      @keyframes shinhwa-fade-up {{
+        0%   {{ opacity: 0; transform: translateY(8px); }}
+        100% {{ opacity: 1; transform: translateY(0); }}
+      }}
+      .hero, .card, .shinhwa-cta-card, .section-head, .result-block, .chip-row {{
+        animation: shinhwa-fade-up 0.45s ease both;
+      }}
+
+      /* 히어로 — 더 깊은 그라데이션 + 라이트 효과 */
+      .hero {{
+        position: relative;
+        background:
+          radial-gradient(ellipse at top left, rgba(255,180,0,0.22) 0%, transparent 45%),
+          radial-gradient(ellipse at bottom right, rgba(255,255,255,0.15) 0%, transparent 50%),
+          linear-gradient(135deg, var(--sh-primary) 0%, var(--sh-primary-2) 100%);
+        color: #FFFFFF;
+        border-radius: 18px;
+        padding: 34px 28px;
+        margin-bottom: 22px;
+        box-shadow: var(--sh-hero-shadow);
+        overflow: hidden;
+      }}
+      .hero::after {{
+        content: '';
+        position: absolute; right: -40px; bottom: -40px;
+        width: 180px; height: 180px;
+        background: radial-gradient(circle, rgba(255,180,0,0.18) 0%, transparent 70%);
+        pointer-events: none;
+      }}
+      .hero h1 {{
+        color: #FFF !important; margin: 0 0 8px 0 !important;
+        font-size: 2.05rem !important; font-weight: 800 !important;
+        letter-spacing: -0.02em;
+      }}
+      .hero p  {{
+        color: rgba(255,255,255,0.94); margin: 0;
+        font-size: 1.02rem; line-height: 1.55;
+      }}
       .hero .pill {{
         display:inline-block; background: var(--sh-accent); color:#0F3D77;
-        padding: 4px 12px; border-radius: 999px; font-weight:700; font-size:0.78rem;
-        margin-bottom: 10px; letter-spacing: 0.3px;
+        padding: 5px 13px; border-radius: 999px; font-weight:800; font-size:0.78rem;
+        margin-bottom: 12px; letter-spacing: 0.4px;
+        box-shadow: 0 2px 8px rgba(255,180,0,0.35);
       }}
+
+      /* 카드 */
       .card {{
         background: var(--sh-card-bg); color: var(--sh-card-text);
-        border-radius: 14px; padding: 20px 22px; margin: 12px 0;
+        border-radius: 14px; padding: 22px 24px; margin: 14px 0;
         box-shadow: var(--sh-shadow); border-left: 6px solid var(--sh-primary);
+        transition: transform .15s ease, box-shadow .15s ease;
+      }}
+      .card:hover {{
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(15,61,119,0.10);
       }}
       .card.warning {{ border-left-color: var(--sh-warning); }}
       .card.accent  {{ border-left-color: var(--sh-accent); }}
       .card h3 {{ margin-top:0 !important; color: var(--sh-section-fg);
-                 font-size: 1.15rem; display:flex; align-items:center; gap:8px; }}
-      .card ul, .card ol {{ margin: 8px 0 0 0; padding-left:20px; }}
-      .card li {{ margin: 6px 0; line-height: 1.55; color: var(--sh-card-text); }}
-      .card b  {{ color: var(--sh-card-text); }}
+                 font-size: 1.18rem; font-weight: 800;
+                 display:flex; align-items:center; gap:8px; }}
+      .card ul, .card ol {{ margin: 10px 0 0 0; padding-left:22px; }}
+      .card li {{ margin: 7px 0; line-height: 1.6; color: var(--sh-card-text); }}
+      .card b  {{ color: var(--sh-card-text); font-weight: 700; }}
+
+      /* 섹션 헤더 */
       .section-head {{
-        display:flex; align-items:center; gap:10px;
-        background: var(--sh-section-bg); padding: 10px 14px; border-radius: 10px;
-        margin: 18px 0 10px 0; border-left: 4px solid var(--sh-primary);
+        display:flex; align-items:center; gap:12px;
+        background: var(--sh-section-bg); padding: 12px 16px; border-radius: 12px;
+        margin: 22px 0 12px 0; border-left: 4px solid var(--sh-primary);
       }}
       .section-head .badge {{
-        background: var(--sh-primary); color:#FFF; width:26px; height:26px;
+        background: linear-gradient(135deg, var(--sh-primary), var(--sh-primary-2));
+        color:#FFF; width:28px; height:28px;
         border-radius: 50%; display:inline-flex; align-items:center; justify-content:center;
-        font-weight: 700; font-size: 0.85rem;
+        font-weight: 800; font-size: 0.85rem;
+        box-shadow: 0 2px 6px rgba(15,61,119,0.25);
       }}
-      .section-head .label {{ font-weight: 700; color: var(--sh-section-fg); font-size: 1.02rem; }}
-      .stButton > button[kind="primary"],
-      .stDownloadButton > button[kind="primary"],
+      .section-head .label {{
+        font-weight: 800; color: var(--sh-section-fg); font-size: 1.05rem;
+        letter-spacing: -0.01em;
+      }}
+
+      /* 폼 입력 위젯 폴리시 */
+      .stTextInput input, .stTextArea textarea,
+      .stMultiSelect [data-baseweb="select"] > div,
+      .stSelectbox [data-baseweb="select"] > div {{
+        background: var(--sh-input-bg) !important;
+        border-radius: 10px !important;
+        border: 1.5px solid var(--sh-input-bd) !important;
+        transition: border-color .15s ease, box-shadow .15s ease !important;
+      }}
+      .stTextInput input:focus, .stTextArea textarea:focus {{
+        border-color: var(--sh-primary) !important;
+        box-shadow: 0 0 0 3px rgba(15,61,119,0.12) !important;
+      }}
+      .stTextInput label, .stTextArea label, .stMultiSelect label,
+      .stSelectbox label, .stRadio label {{
+        font-weight: 600 !important;
+      }}
+
+      /* 폼 제출 버튼 — 그라데이션 + 떠오르는 hover */
       .stFormSubmitButton > button[kind="primary"] {{
+        background: linear-gradient(135deg, var(--sh-primary) 0%, var(--sh-primary-2) 100%) !important;
+        border: none !important;
+        color:#FFF !important;
+        height: 54px !important;
+        font-size: 1.02rem !important;
+        font-weight: 800 !important;
+        letter-spacing: -0.01em !important;
+        border-radius: 12px !important;
+        box-shadow: 0 6px 16px rgba(15,61,119,0.28) !important;
+        transition: transform .12s ease, box-shadow .15s ease !important;
+      }}
+      .stFormSubmitButton > button[kind="primary"]:hover {{
+        transform: translateY(-2px);
+        box-shadow: 0 10px 22px rgba(15,61,119,0.38) !important;
+      }}
+      /* 일반 버튼·다운로드 버튼은 기존 유지 + 살짝 폴리시 */
+      .stButton > button[kind="primary"],
+      .stDownloadButton > button[kind="primary"] {{
         background: var(--sh-primary) !important; border:none !important;
         color:#FFF !important; height:48px; font-weight:700;
+        border-radius: 10px !important;
+        transition: transform .12s ease, box-shadow .15s ease !important;
       }}
       .stButton > button[kind="primary"]:hover,
-      .stDownloadButton > button[kind="primary"]:hover,
-      .stFormSubmitButton > button[kind="primary"]:hover {{ background:#0a2c5a !important; }}
-      .footer {{ text-align:center; color: var(--sh-muted); font-size:0.82rem; margin-top:20px; }}
+      .stDownloadButton > button[kind="primary"]:hover {{
+        background:#0a2c5a !important;
+        transform: translateY(-1px);
+        box-shadow: 0 6px 14px rgba(15,61,119,0.25) !important;
+      }}
+
+      /* 결과 영역의 칩(chip) 배지 */
+      .chip-row {{
+        display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px 0;
+      }}
+      .chip {{
+        display: inline-flex; align-items: center; gap: 6px;
+        background: var(--sh-section-bg);
+        color: var(--sh-section-fg);
+        border: 1px solid rgba(15,61,119,0.18);
+        padding: 6px 12px; border-radius: 999px;
+        font-size: 0.85rem; font-weight: 600;
+        line-height: 1.4;
+      }}
+      .chip.accent {{
+        background: rgba(255,180,0,0.16);
+        color: #8A5A00;
+        border-color: rgba(255,180,0,0.45);
+      }}
+      @media (prefers-color-scheme: dark) {{
+        .chip.accent {{ color:#FFD66A; }}
+      }}
+      .chip-label {{
+        font-size: 0.78rem; font-weight: 700; color: var(--sh-muted);
+        margin-bottom: 4px; letter-spacing: 0.02em;
+        text-transform: uppercase;
+      }}
+
+      .footer {{ text-align:center; color: var(--sh-muted); font-size:0.82rem; margin-top:24px; }}
+
+      /* 모바일 폭에서 패딩·폰트 조정 */
+      @media (max-width: 640px) {{
+        .hero {{ padding: 26px 20px; border-radius: 14px; }}
+        .hero h1 {{ font-size: 1.65rem !important; }}
+        .card {{ padding: 18px 18px; }}
+        .stFormSubmitButton > button[kind="primary"] {{ height: 50px !important; font-size: 0.98rem !important; }}
+      }}
 
       /* 1:1 컨설팅 CTA 카드 + 버튼 (어떤 테마에서도 가독성 보장) */
       .shinhwa-cta-card {{
@@ -265,6 +406,59 @@ def _build_consult_mailto(
         f"mailto:{CONSULT_EMAIL}"
         f"?subject={urllib.parse.quote(subject)}"
         f"&body={urllib.parse.quote(body)}"
+    )
+
+
+def render_selection_chips(
+    business_name: str,
+    user_name: str,
+    ai_level: str,
+    main_property: list[str],
+    custom_property: str,
+    ai_goals: list[str],
+    custom_goals: str,
+) -> None:
+    """선택한 항목들을 시각적 칩 배지로 표시 (로드맵 텍스트 위)."""
+    def _chips(items: list[str], extra: str = "", accent: bool = False) -> str:
+        cls = "chip accent" if accent else "chip"
+        html = ""
+        for it in items:
+            html += f'<span class="{cls}">{it}</span>'
+        if extra:
+            html += f'<span class="{cls}">+ {extra}</span>'
+        return html or '<span class="chip" style="opacity:.5;">(없음)</span>'
+
+    st.markdown(
+        f"""
+        <div class="result-block" style="
+            background: var(--sh-card-bg);
+            border-radius: 14px;
+            padding: 22px 24px;
+            margin: 14px 0;
+            box-shadow: var(--sh-shadow);
+            border-left: 6px solid var(--sh-accent);">
+          <div style="display:flex; flex-wrap:wrap; gap:18px;
+                      align-items:baseline; margin-bottom:12px;">
+            <div>
+              <div class="chip-label">진단 대상</div>
+              <div style="font-size:1.1rem; font-weight:800; color: var(--sh-card-text);">
+                {business_name} · {user_name} 공인중개사님
+              </div>
+            </div>
+            <div style="margin-left:auto;">
+              <div class="chip-label">AI 숙련도</div>
+              <span class="chip accent">{ai_level}</span>
+            </div>
+          </div>
+
+          <div class="chip-label">주력 매물·업무</div>
+          <div class="chip-row">{_chips(main_property, custom_property)}</div>
+
+          <div class="chip-label" style="margin-top:12px;">AI 활용 목표</div>
+          <div class="chip-row">{_chips(ai_goals, custom_goals, accent=True)}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
 
@@ -592,6 +786,17 @@ if submitted:
             ai_goals=ai_goals,
             custom_goals=custom_goals.strip(),
             ai_level=ai_level,
+        )
+
+        # 진단 요약 — 칩 배지로 한눈에
+        render_selection_chips(
+            business_name=business_name.strip(),
+            user_name=user_name.strip(),
+            ai_level=ai_level,
+            main_property=main_property,
+            custom_property=custom_property.strip(),
+            ai_goals=ai_goals,
+            custom_goals=custom_goals.strip(),
         )
 
         with st.container(border=True):
