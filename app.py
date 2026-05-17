@@ -126,6 +126,66 @@ st.markdown(
       .stDownloadButton > button[kind="primary"]:hover,
       .stFormSubmitButton > button[kind="primary"]:hover {{ background:#0a2c5a !important; }}
       .footer {{ text-align:center; color: var(--sh-muted); font-size:0.82rem; margin-top:20px; }}
+
+      /* 1:1 컨설팅 CTA 카드 + 버튼 (어떤 테마에서도 가독성 보장) */
+      .shinhwa-cta-card {{
+        margin: 26px 0 10px 0;
+        padding: 24px 22px;
+        background: linear-gradient(135deg, #FFF7DE 0%, #FFE9A8 100%);
+        border-left: 6px solid {ACCENT};
+        border-radius: 14px;
+        box-shadow: 0 4px 14px rgba(255,180,0,0.18);
+      }}
+      .shinhwa-cta-card .pill {{
+        display:inline-block; background:{PRIMARY}; color:#FFFFFF;
+        font-size:11px; font-weight:700; letter-spacing:.4px;
+        padding:4px 10px; border-radius:999px; margin-bottom:10px;
+      }}
+      .shinhwa-cta-card h3 {{
+        margin:6px 0 4px 0 !important;
+        color:#0F3D77 !important;
+        font-size:1.25rem !important;
+      }}
+      .shinhwa-cta-card p,
+      .shinhwa-cta-card p b {{
+        color:#3A4250 !important;
+      }}
+      .shinhwa-cta-card .cta-hint {{
+        color:#6B7686 !important;
+        font-size:11.5px;
+        line-height:1.5;
+        margin-top:14px;
+      }}
+
+      /* 컨설팅 버튼 — Streamlit anchor 기본 스타일을 강하게 덮어쓰기 */
+      a.shinhwa-cta-btn,
+      a.shinhwa-cta-btn:link,
+      a.shinhwa-cta-btn:visited,
+      a.shinhwa-cta-btn:hover,
+      a.shinhwa-cta-btn:active,
+      .stMarkdown a.shinhwa-cta-btn,
+      .stMarkdown a.shinhwa-cta-btn:visited {{
+        display: inline-block !important;
+        background: #FFFFFF !important;
+        color: #0F3D77 !important;
+        text-decoration: none !important;
+        font-weight: 800 !important;
+        font-size: 1rem !important;
+        padding: 13px 24px !important;
+        border-radius: 10px !important;
+        border: 2px solid #0F3D77 !important;
+        box-shadow: 0 4px 12px rgba(15,61,119,0.18) !important;
+        transition: transform .08s ease, box-shadow .15s ease, background .15s ease !important;
+      }}
+      a.shinhwa-cta-btn:hover {{
+        background: #0F3D77 !important;
+        color: #FFFFFF !important;
+        transform: translateY(-1px);
+        box-shadow: 0 6px 18px rgba(15,61,119,0.28) !important;
+      }}
+      a.shinhwa-cta-btn span.btn-text {{
+        color: inherit !important;
+      }}
     </style>
     """,
     unsafe_allow_html=True,
@@ -212,34 +272,20 @@ def consulting_cta(mailto_url: str) -> None:
     """결과 페이지 하단의 1:1 컨설팅 신청 CTA 카드."""
     st.markdown(
         f"""
-        <div style="margin: 26px 0 10px 0; padding: 24px 22px;
-                    background: linear-gradient(135deg, #FFF7DE 0%, #FFE9A8 100%);
-                    border-left: 6px solid {ACCENT};
-                    border-radius: 14px;
-                    box-shadow: 0 4px 14px rgba(255,180,0,0.18);">
-          <div style="display:inline-block; background:{PRIMARY}; color:#FFF;
-                      font-size:11px; font-weight:700; letter-spacing:.4px;
-                      padding:4px 10px; border-radius:999px; margin-bottom:10px;">
-            ⭐ 수강생 전용 한정 혜택
-          </div>
-          <h3 style="margin:6px 0 4px 0; color:#0F3D77; font-size:1.25rem;">
-            더 깊은 1:1 맞춤 컨설팅이 필요하신가요?
-          </h3>
-          <p style="margin:0 0 14px 0; color:#3A4250; font-size:0.95rem; line-height:1.6;">
+        <div class="shinhwa-cta-card">
+          <span class="pill">⭐ 수강생 전용 한정 혜택</span>
+          <h3>더 깊은 1:1 맞춤 컨설팅이 필요하신가요?</h3>
+          <p style="margin:0 0 16px 0; font-size:0.95rem; line-height:1.6;">
             진단 결과를 바탕으로 <b>주력 매물·고객층·업무 환경</b>에 꼭 맞는
             AI 자동화 설계를 받아보실 수 있습니다.<br>
             <b>수강생분께만</b> 신화AI부동산의 노하우와 시간을 우선 배정해드립니다.
           </p>
-          <a href="{mailto_url}"
-             style="display:inline-block; background:{PRIMARY}; color:#FFF !important;
-                    text-decoration:none; padding:12px 22px; border-radius:10px;
-                    font-weight:700; font-size:0.97rem;
-                    box-shadow: 0 3px 10px rgba(15,61,119,0.25);">
-            📧 신화 대표에게 컨설팅 문의하기
+          <a href="{mailto_url}" class="shinhwa-cta-btn">
+            <span class="btn-text">📧 신화 대표에게 컨설팅 문의하기</span>
           </a>
-          <p style="margin:14px 0 0 0; color:#6B7686; font-size:11.5px; line-height:1.5;">
+          <p class="cta-hint">
             💡 버튼을 누르시면 메일 앱이 열리며,
-            <b>진단 요약이 자동으로 본문에 채워집니다.</b>
+            <b style="color:#3A4250 !important;">진단 요약이 자동으로 본문에 채워집니다.</b>
             희망 일정과 다루고 싶은 주제만 추가로 적어 보내주세요.
           </p>
         </div>
