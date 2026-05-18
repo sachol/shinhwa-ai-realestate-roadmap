@@ -20,6 +20,10 @@ CONSULT_EMAIL = "sachol.cap@gmail.com"
 # 카카오톡 공유 — 앱 배포 URL (공유 카드 링크 대상)
 SHARE_APP_URL = "https://shinhwa-ai-realestate-roadmap-rsaaiforumfighting.streamlit.app"
 
+# 카카오 공유 버튼 표시 토글 — 4019 인증 에러 디버깅 동안 임시 OFF
+# 해결되면 True 로 되돌리면 즉시 부활됨
+SHOW_KAKAO_SHARE = False
+
 from storage import (
     init_storage,
     save_response,
@@ -640,7 +644,10 @@ def kakao_share_button() -> None:
     Kakao SDK v2 (Share.sendDefault, objectType='text')를 사용해
     이미지 없이 텍스트+버튼만 있는 공유 카드를 즉시 발송한다.
     JavaScript 키가 secrets에 없으면 렌더링을 건너뛴다.
+    SHOW_KAKAO_SHARE 토글이 False 이면 즉시 종료한다.
     """
+    if not SHOW_KAKAO_SHARE:
+        return
     js_key = st.secrets.get("kakao", {}).get("javascript_key", "")
     if not js_key:
         return
