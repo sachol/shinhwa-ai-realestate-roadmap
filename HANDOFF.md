@@ -69,7 +69,7 @@
 | ~~완료~~ | ~~1:1 컨설팅 CTA~~ | — | — | — | ✅ 2026-05-17 |
 | ~~완료~~ | ~~디자인 보강 (Pretendard·칩·애니메이션)~~ | — | — | — | ✅ 2026-05-17 |
 | ~~완료~~ | ~~관리자 대시보드 통계 위젯~~ | — | — | — | ✅ 2026-05-17 |
-| **1순위** | 카카오톡 공유 버튼 (결과 페이지에 공유 CTA) | 중간 | 1~2시간 | 무료 | 카카오 디벨로퍼스 앱 등록 필요 |
+| **🟡 진행중(블록)** | 카카오톡 공유 버튼 (결과 페이지 CTA) | — | — | — | 코드 머지됨 / 4019 인증 에러로 운영 노출 차단 — 아래 11번 참고 |
 | **2순위** | 시트 응답을 숙련도/매물별 자동 분류 (강의반 배정용) | 중간 | 1~2시간 | 무료 | Apps Script 또는 Sheets 수식 |
 | **3순위** | 후속 메일 자동 발송 (1주/1달 뒤) | 중간 | 반나절 | 무료 | GitHub Actions 등 외부 스케줄러 필요 |
 | **4순위** | 재진단 비교 리포트 (한 달 후 진행도) | 중간 | 반나절 | 무료 | 이메일 기준 lookup |
@@ -142,3 +142,40 @@ ai-roadmap-generator-for-agents/
 - **누가 진단받았나?**: 강사 알림 메일이 sachol.cap@gmail.com 받은편지함에 즉시 도착
 - **전체 트렌드 보기**: 배포 URL → 사이드바에 관리자 비밀번호 입력 → 대시보드
 - **수강생이 PDF 못 받았다고 하면?**: 스팸함 확인 권유 → 안 되면 관리자 대시보드에서 CSV 받아 직접 발송 가능
+
+## 11. 🟡 카카오톡 공유 버튼 — 4019 인증 에러 미해결 (다음 세션 우선 항목)
+
+### 현재 상태 (2026-05-18 마지막 작업)
+- ✅ 코드 머지 완료 (PR #1) — `kakao_share_button()` 함수, `secrets.toml [kakao]`, `.gitignore` 캡처 보호
+- ✅ 운영 안전 차단 (PR #2) — `app.py`의 `SHOW_KAKAO_SHARE = False` 토글로 렌더링 차단
+- ❌ 카카오 4019 인증 에러 — 로컬·운영 둘 다 발생
+
+### 카카오 디벨로퍼스 등록 상태 (확인됨)
+- 앱명: 공인중개사를 위한 AI 학습 진단기 (앱 ID: 1460796)
+- JavaScript 키: `27618d4c245595165d0bea959cd0bff3` (Streamlit Cloud Secrets·로컬 secrets.toml 동일)
+- **제품 링크 관리 → 웹 도메인**: `https://shinhwa-...streamlit.app` + `http://localhost:8501` ✅
+- **플랫폼 키 → JavaScript SDK 도메인**: `https://shinhwa-...streamlit.app` + `http://localhost:8501` ✅
+
+### 의심 원인 (아직 미확정)
+1. **Streamlit components iframe origin이 `null` 또는 srcdoc** → 카카오 SDK 도메인 검증 실패
+2. 카카오 디벨로퍼스 도메인 등록 후 **최대 24h 캐시 반영 대기** (카카오 공식 안내)
+3. **비즈앱 인증** 필요 가능성 (대표님 보유 비즈앱 키로 분리 테스트 미실시)
+
+### 다음 세션에서 시도할 디버깅 순서
+1. F12 콘솔에서 `[...document.querySelectorAll('iframe')].map(f => ({src: f.src, srcdoc: f.hasAttribute('srcdoc'), sandbox: f.sandbox.value}))` 실행 → iframe origin 확정
+2. iframe이 `srcdoc`이면 → SDK 우회 방식 변경 (`components.v1.iframe`으로 외부 정적 HTML 임베드 또는 sharer URL 직접 호출)
+3. iframe origin이 정상이면 → 비즈앱 키로 임시 교체 테스트 → 비즈앱 인증 필요 여부 확정
+4. 24h 후 재시도도 병행 (도메인 캐시 반영 대기 가설 검증)
+
+### 해결되면 부활시키는 법
+- `app.py` 의 `SHOW_KAKAO_SHARE = False` → `True` 로 변경 후 PR/푸시
+- 추가 secrets·등록 작업 불필요 (이미 모두 세팅됨)
+
+### 만약 영영 안 되면
+- 대표님이 "정 안 되면 카카오 버튼은 제외해도 좋다"고 말씀하셨음 (2026-05-18)
+- 그 경우 `app.py` 의 `kakao_share_button()` 정의·호출·CSS 일괄 제거 PR 만들기
+
+## 12. 작업 일자 (업데이트)
+
+- 카카오 공유 버튼 시도 + 4019 차단 운영 안전 처리: **2026-05-18**
+- 다음 세션 예정: **4019 원인 확정 (iframe origin or 비즈앱 인증)**
