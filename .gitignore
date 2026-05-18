@@ -11,3 +11,9 @@ venv/
 *service_account*.json
 shinhwa-ai-realestate-*.json
 .bkit/
+
+# 카카오 디벨로퍼스 / 기타 임시 캡처 (API 키 노출 위험)
+KakaoTalk_*.png
+KakaoTalk_*.jpg
+스크린샷*.png
+*Screenshot*.png
