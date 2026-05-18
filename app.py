@@ -12,9 +12,13 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 import streamlit as st
+from streamlit.components.v1 import html as components_html
 
 # 1:1 컨설팅 문의 수신 메일 (CTA mailto 대상)
 CONSULT_EMAIL = "sachol.cap@gmail.com"
+
+# 카카오톡 공유 — 앱 배포 URL (공유 카드 링크 대상)
+SHARE_APP_URL = "https://shinhwa-ai-realestate-roadmap-rsaaiforumfighting.streamlit.app"
 
 from storage import (
     init_storage,
@@ -267,6 +271,30 @@ st.markdown(
         .hero h1 {{ font-size: 1.65rem !important; }}
         .card {{ padding: 18px 18px; }}
         .stFormSubmitButton > button[kind="primary"] {{ height: 50px !important; font-size: 0.98rem !important; }}
+      }}
+
+      /* 카카오톡 공유 카드 — 동료 중개사 추천 (앱 홍보 CTA) */
+      .shinhwa-share-card {{
+        margin: 22px 0 6px 0;
+        padding: 22px 22px 8px 22px;
+        background: linear-gradient(135deg, #FFFDF1 0%, #FFF6C9 100%);
+        border-left: 6px solid #FEE500;
+        border-radius: 14px;
+        box-shadow: 0 3px 10px rgba(254,229,0,0.18);
+      }}
+      .shinhwa-share-card .share-pill {{
+        display:inline-block; background:#3C1E1E; color:#FEE500;
+        font-size:11px; font-weight:700; letter-spacing:.4px;
+        padding:4px 10px; border-radius:999px; margin-bottom:10px;
+      }}
+      .shinhwa-share-card h3 {{
+        margin:6px 0 4px 0 !important;
+        color:#0F3D77 !important;
+        font-size:1.2rem !important;
+      }}
+      .shinhwa-share-card p,
+      .shinhwa-share-card p b {{
+        color:#3A4250 !important;
       }}
 
       /* 1:1 컨설팅 CTA 카드 + 버튼 (어떤 테마에서도 가독성 보장) */
@@ -604,6 +632,88 @@ def render_selection_chips(
         </div>
         """,
         unsafe_allow_html=True,
+    )
+
+
+def kakao_share_button() -> None:
+    """카카오톡 공유 버튼 — 동료 중개사 추천용 (앱 홍보 컨셉).
+    Kakao SDK v2 (Share.sendDefault, objectType='text')를 사용해
+    이미지 없이 텍스트+버튼만 있는 공유 카드를 즉시 발송한다.
+    JavaScript 키가 secrets에 없으면 렌더링을 건너뛴다.
+    """
+    js_key = st.secrets.get("kakao", {}).get("javascript_key", "")
+    if not js_key:
+        return
+
+    share_text = (
+        "공인중개사 전용 AI 학습 진단\n\n"
+        "주력 매물·숙련도 1분 입력 → 맞춤 AI 학습 로드맵 자동 생성.\n"
+        "신화AI부동산 제공."
+    )
+    # JS 문자열 리터럴 안에서 줄바꿈은 \n 으로 이스케이프
+    share_text_js = share_text.replace("\\", "\\\\").replace("\n", "\\n").replace("'", "\\'")
+
+    st.markdown(
+        """
+        <div class="shinhwa-share-card">
+          <span class="share-pill">💬 동료 중개사에게도 추천</span>
+          <h3>이 진단, 동료 중개사에게도 알려주세요</h3>
+          <p style="margin:0 0 14px 0; font-size:0.95rem; line-height:1.6;">
+            한 분이라도 더 <b>AI로 시간 절약</b>하실 수 있도록,<br>
+            <b>카카오톡 1번 클릭</b>으로 공유해보세요.
+          </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    components_html(
+        f"""
+        <div style="text-align:center; padding:6px 0 12px 0;">
+          <button id="shinhwa-kakao-share-btn"
+            style="
+              background:#FEE500; color:#191600;
+              border:none; border-radius:12px;
+              padding:14px 28px; font-size:1.0rem; font-weight:700;
+              cursor:pointer; box-shadow:0 4px 14px rgba(254,229,0,0.35);
+              transition:transform .12s ease, box-shadow .12s ease;
+              font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',sans-serif;
+            "
+            onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 6px 18px rgba(254,229,0,0.45)';"
+            onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 14px rgba(254,229,0,0.35)';"
+          >
+            💬 카카오톡으로 동료 중개사에게 추천하기
+          </button>
+          <p style="margin:10px 0 0 0; font-size:0.82rem; color:#6B7280;">
+            새 창에서 카카오톡 메시지함이 열립니다.
+          </p>
+        </div>
+        <script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js"></script>
+        <script>
+          (function() {{
+            try {{
+              if (typeof Kakao === 'undefined') return;
+              if (!Kakao.isInitialized()) Kakao.init('{js_key}');
+              var btn = document.getElementById('shinhwa-kakao-share-btn');
+              if (!btn) return;
+              btn.addEventListener('click', function() {{
+                Kakao.Share.sendDefault({{
+                  objectType: 'text',
+                  text: '{share_text_js}',
+                  link: {{
+                    mobileWebUrl: '{SHARE_APP_URL}',
+                    webUrl: '{SHARE_APP_URL}'
+                  }},
+                  buttonTitle: '지금 무료 진단 받기'
+                }});
+              }});
+            }} catch (e) {{
+              console.error('Kakao share init failed:', e);
+            }}
+          }})();
+        </script>
+        """,
+        height=160,
     )
 
 
@@ -1011,6 +1121,9 @@ if submitted:
                     "ℹ️ 이메일 발송이 일시적으로 지연되고 있습니다. "
                     "위의 **'PDF 보고서로 저장하기'** 버튼으로 직접 받아두시면 됩니다."
                 )
+
+        # 카카오톡 공유 버튼 — 동료 중개사 추천 (앱 홍보)
+        kakao_share_button()
 
         # 1:1 컨설팅 신청 CTA — Gmail 웹 + mailto + 복사 폴백 3종
         subj, body_text = _build_consult_message(
