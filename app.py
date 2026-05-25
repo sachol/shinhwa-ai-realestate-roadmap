@@ -431,6 +431,81 @@ def _level_to_number(level_str: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
+OWNER_EMAILS: tuple[str, ...] = ("sachol.cap@gmail.com", "sachol@kakao.com")
+TEST_KEYWORDS: tuple[str, ...] = ("TEST", "테스트", "알림테스트", "홍길동")
+
+
+def _filter_rows(
+    rows: list[dict],
+    *,
+    exclude_test: bool = True,
+    exclude_duplicates: bool = True,
+    exclude_owner: bool = False,
+) -> tuple[list[dict], dict]:
+    """관리자 통계용 응답 필터링.
+
+    Args:
+        rows: 시트/DB에서 받은 원본 응답 list.
+        exclude_test: TEST 키워드(business_name·user_name)가 포함된 행 제외.
+        exclude_duplicates: 같은 이메일의 중복 응답을 가장 최근 1건만 남김.
+        exclude_owner: OWNER_EMAILS 에 등록된 이메일 응답 제외.
+
+    Returns:
+        (filtered, stats) — stats 는 {"test": n, "duplicate": n, "owner": n} 형태의 제거 건수.
+    """
+    excluded = {"test": 0, "duplicate": 0, "owner": 0}
+    working = list(rows)
+
+    if exclude_test:
+        kept = []
+        for r in working:
+            biz = str(r.get("business_name") or "").upper()
+            usr = str(r.get("user_name") or "").upper()
+            if any(kw.upper() in biz or kw.upper() in usr for kw in TEST_KEYWORDS):
+                excluded["test"] += 1
+            else:
+                kept.append(r)
+        working = kept
+
+    if exclude_owner:
+        owner_set = {e.lower() for e in OWNER_EMAILS}
+        kept = []
+        for r in working:
+            email = str(r.get("email") or "").lower().strip()
+            if email in owner_set:
+                excluded["owner"] += 1
+            else:
+                kept.append(r)
+        working = kept
+
+    if exclude_duplicates:
+        # datetime 파싱으로 robust 정렬 (hour zero-pad 누락 케이스 대응)
+        # 최신 응답이 먼저 오게 정렬 → 처음 본 이메일만 유지 → 최신 1건만 남김
+        parsed_dts = pd.to_datetime(
+            [r.get("submitted_at") for r in working], errors="coerce"
+        )
+        pairs = list(zip(parsed_dts, working))
+        pairs.sort(
+            key=lambda p: p[0] if pd.notna(p[0]) else pd.Timestamp.min,
+            reverse=True,
+        )
+        seen_emails: set[str] = set()
+        kept_pairs: list = []
+        for dt, r in pairs:
+            email = str(r.get("email") or "").lower().strip()
+            if email and email in seen_emails:
+                excluded["duplicate"] += 1
+                continue
+            if email:
+                seen_emails.add(email)
+            kept_pairs.append((dt, r))
+        # 원래 시간 오름차순 복원 (UI/CSV 출력 일관성)
+        kept_pairs.sort(key=lambda p: p[0] if pd.notna(p[0]) else pd.Timestamp.min)
+        working = [r for _, r in kept_pairs]
+
+    return working, excluded
+
+
 def render_admin_dashboard(rows: list[dict]) -> None:
     """관리자 대시보드 — KPI 4타일 + 4개 차트."""
     if not rows:
@@ -820,15 +895,51 @@ if is_admin_user:
 
     rows = all_responses()
 
-    # 통계 위젯
-    render_admin_dashboard(rows)
+    # ── 통계 필터 옵션 (체크 시 즉시 KPI·차트·테이블·CSV 모두 반영) ──
+    with st.expander("🔍 통계 필터 옵션", expanded=False):
+        f_col1, f_col2, f_col3 = st.columns(3)
+        with f_col1:
+            f_test = st.checkbox(
+                "TEST 응답 제외",
+                value=True,
+                help="business_name 또는 user_name 에 'TEST'·'테스트'·'홍길동' 등이 포함된 행 제외",
+            )
+        with f_col2:
+            f_dup = st.checkbox(
+                "중복 응답 제외 (이메일 기준 최신만)",
+                value=True,
+                help="같은 이메일이 여러 번 제출된 경우, 가장 최근 응답 1건만 통계에 반영",
+            )
+        with f_col3:
+            f_owner = st.checkbox(
+                "대표님 본인 응답 제외",
+                value=False,
+                help="sachol.cap@gmail.com / sachol@kakao.com 응답 제외 (시연·검증 응답 분리)",
+            )
 
-    # 전체 응답 테이블
-    st.markdown(f"### 📋 전체 응답 ({len(rows)}건)")
-    if not rows:
-        st.info("아직 응답이 없습니다.")
+    filtered_rows, excluded_stats = _filter_rows(
+        rows,
+        exclude_test=f_test,
+        exclude_duplicates=f_dup,
+        exclude_owner=f_owner,
+    )
+
+    total_excluded = sum(excluded_stats.values())
+    if total_excluded > 0:
+        st.caption(
+            f"🔍 원본 {len(rows)}건 → 필터 후 **{len(filtered_rows)}건** "
+            f"(TEST {excluded_stats['test']}건 · 중복 {excluded_stats['duplicate']}건 · 본인 {excluded_stats['owner']}건 제외)"
+        )
+
+    # 통계 위젯 (필터된 데이터 기준)
+    render_admin_dashboard(filtered_rows)
+
+    # 전체 응답 테이블 (필터된 데이터 기준)
+    st.markdown(f"### 📋 전체 응답 ({len(filtered_rows)}건)")
+    if not filtered_rows:
+        st.info("필터 조건을 만족하는 응답이 없습니다.")
     else:
-        df = pd.DataFrame(rows)
+        df = pd.DataFrame(filtered_rows)
         preferred = [
             "id", "submitted_at", "business_name", "user_name", "email",
             "ai_level", "main_property", "custom_property",
@@ -841,7 +952,7 @@ if is_admin_user:
 
         csv = df.to_csv(index=False).encode("utf-8-sig")
         st.download_button(
-            "📥 전체 응답 CSV 다운로드",
+            "📥 전체 응답 CSV 다운로드 (필터 반영)",
             data=csv,
             file_name=f"shinhwa_responses_{datetime.now():%Y%m%d_%H%M}.csv",
             mime="text/csv",

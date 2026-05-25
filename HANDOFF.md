@@ -50,6 +50,10 @@
     - KPI 4타일: 총 응답 / 최근 7일 / 평균 숙련도(1-5) / Top 매물
     - 매물 분포·AI 목표 Top·숙련도 분포·일별 응답 추이 4개 차트
 12. ✅ 전체 응답 테이블 + CSV 다운로드
+12-1. ✅ **관리자 통계 필터 옵션** (2026-05-25 추가) — TEST 응답·중복 응답·대표님 본인 응답 토글 제외
+    - 필터 즉시 KPI·차트·테이블·CSV 모두 반영
+    - 베타 데이터 클렌징 (테스트 4~5건 제거) 후 통계 신뢰도 ↑
+    - `_filter_rows()` 순수 함수로 분리, `OWNER_EMAILS`·`TEST_KEYWORDS` 상수로 확장 용이
 
 ### 디자인·UX
 13. ✅ 다크/라이트 모드 자동 대응 (prefers-color-scheme)
@@ -175,7 +179,54 @@ ai-roadmap-generator-for-agents/
 - 대표님이 "정 안 되면 카카오 버튼은 제외해도 좋다"고 말씀하셨음 (2026-05-18)
 - 그 경우 `app.py` 의 `kakao_share_button()` 정의·호출·CSS 일괄 제거 PR 만들기
 
+### 2026-05-24 추가 진단 세션 결과 (3시간) — 가설 ①·③ 모두 기각
+
+**검증한 것 (모두 ✅ 통과, 그러나 4019 지속)**:
+
+1. **iframe origin 가설 (①) 기각 ✅**
+   - F12 콘솔 진단으로 확정: Streamlit components iframe 의 `src`·`srcdoc`·`sandbox` 실측치
+     ```json
+     {
+       "src": "https://shinhwa-ai-realestate-roadmap-rsaaiforumfighting.streamlit.app/~/+/",
+       "srcdoc": false,
+       "sandbox": "allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads"
+     }
+     ```
+   - 결론: iframe origin = 등록 도메인과 동일. `null` origin 가설 오류였음.
+
+2. **비즈앱 인증 가설 (③) 검증 시도 → 4019 동일**
+   - 대표님 보유 비즈앱(키: `589fd23fd9399d999afd314be11a0345`)으로 JS 키 임시 스왑
+   - 비즈앱 JavaScript SDK 도메인에 streamlit·localhost 모두 등록 확인
+   - 비즈앱 **제품 링크 관리**에 streamlit·localhost 신규 등록 (이전에 누락 발견)
+   - 결과: 또 4019. UUID `a191f418-b3bd-4712-9b3e-6bcfe9cce11b`
+
+3. **카카오 SDK 안내문 (재시도 후) 가이드 그대로 따랐는데도 실패**:
+   - ① "웹 도메인을 [앱] > [제품 링크 관리]에 등록" ✅ 완료
+   - ② "개발 환경 맞는 키 타입" — JS 키 사용 중 ✅
+   - ③ "키 해시 Android 등록" — Web 케이스라 N/A
+
+**남은 가능 원인 (다음 세션 우선 탐색)**:
+
+| 우선순위 | 가설 | 확인 방법 |
+|:---:|---|---|
+| **A** | Streamlit secrets 캐시 미반영 (비즈앱 키 swap이 실제로 적용 안 됐을 수 있음 — 재시작 후에도 옛 키 사용) | F12 → Network 탭 → `sharer.kakao.com` 요청의 `app_key` 파라미터 실측 |
+| **B** | 카카오 측 도메인 등록 캐시 (보통 즉시지만 가끔 지연) | 24h 후 동일 조건에서 재시도 |
+| **C** | 비즈앱이라도 "카카오톡 공유" 제품 활성화 토글 별도 필요 | 디벨로퍼스 콘솔 → 제품 설정 → 카카오 메시지/공유 활성화 여부 |
+| **D** | components.html 의 `Kakao.init()` 타이밍 — iframe load 와 SDK script load 사이 race condition | `Kakao.isInitialized()` 디버깅 로그 추가 |
+| **E** | `objectType: 'text'` 의 카카오 측 제약 (비즈앱이라도 메시지 템플릿 검수 필요할 수도) | `objectType: 'feed'` 로 변경하여 동일 에러인지 비교 |
+
+**대표님 결정 (2026-05-24)**:
+- 오늘은 여기까지. **두 가지 옵션 보존** — ① 차분히 다시 진행 / ② 카카오 버튼 완전 제거.
+- 결정은 다음 세션에서. 그때까지 현재 차단 상태(`SHOW_KAKAO_SHARE = False`) 그대로 유지.
+
+**로컬 환경 백업 상태**:
+- `app.py:25` → `SHOW_KAKAO_SHARE = False` 로 롤백 완료 (커밋 안 함, 원래 상태)
+- `.streamlit/secrets.toml` → `[kakao] javascript_key` 일반앱 키로 롤백, 비즈앱 키는 주석으로 보존 (다음 세션 즉시 swap 가능)
+- 비즈앱의 제품 링크 관리·SDK 도메인 등록은 **유지** (롤백 X, 다음 시도 시 유용)
+
 ## 12. 작업 일자 (업데이트)
 
 - 카카오 공유 버튼 시도 + 4019 차단 운영 안전 처리: **2026-05-18**
-- 다음 세션 예정: **4019 원인 확정 (iframe origin or 비즈앱 인증)**
+- 추가 진단 (origin 가설 기각 + 비즈앱 스왑 시도 + 4019 지속): **2026-05-24**
+- 관리자 통계 필터 옵션 추가 (베타 데이터 클렌징 기능): **2026-05-25**
+- 다음 세션 예정: **카카오는 보류 / 백로그 진행 (후속 메일 자동 발송 or LLM custom_goals 분석 검토 중)**
