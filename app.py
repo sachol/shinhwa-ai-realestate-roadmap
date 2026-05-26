@@ -471,6 +471,97 @@ def classify_main_class(ai_level: str) -> str:
     return CLASS_UNCLASSIFIED
 
 
+def find_previous_responses(email: str, all_rows: list[dict]) -> list[dict]:
+    """같은 이메일의 이전 응답을 최근 → 오래된 순으로 반환.
+
+    Args:
+        email: 검색 대상 이메일 (대소문자·공백 무시).
+        all_rows: 전체 응답 리스트 (보통 all_responses() 의 결과).
+
+    Returns:
+        같은 이메일의 응답 리스트 (없으면 빈 리스트). 0번째가 가장 최근.
+    """
+    if not email:
+        return []
+    target = email.lower().strip()
+    matches = [
+        r for r in all_rows
+        if str(r.get("email") or "").lower().strip() == target
+    ]
+    if not matches:
+        return []
+    parsed_dts = pd.to_datetime(
+        [r.get("submitted_at") for r in matches], errors="coerce"
+    )
+    pairs = list(zip(parsed_dts, matches))
+    pairs.sort(
+        key=lambda p: p[0] if pd.notna(p[0]) else pd.Timestamp.min,
+        reverse=True,
+    )
+    return [r for _, r in pairs]
+
+
+def build_comparison(current: dict, previous: dict) -> dict:
+    """현재 응답과 직전 응답을 비교한 리포트 dict 반환.
+
+    Args:
+        current: 방금 제출된 응답 (save_response 직전 payload 형태).
+        previous: 같은 이메일의 직전 응답 (시트 row).
+
+    Returns:
+        {
+          "days_between": int | None,
+          "level": {"prev": int|None, "current": int|None, "delta": int|None,
+                    "prev_label": str, "current_label": str},
+          "properties": {"added": list[str], "removed": list[str], "kept": list[str]},
+          "goals": {"added": list[str], "removed": list[str], "kept": list[str]},
+        }
+    """
+    # 시간 간격
+    cur_dt = pd.to_datetime(current.get("submitted_at"), errors="coerce")
+    prev_dt = pd.to_datetime(previous.get("submitted_at"), errors="coerce")
+    days_between: int | None = None
+    if pd.notna(cur_dt) and pd.notna(prev_dt):
+        days_between = max(0, (cur_dt - prev_dt).days)
+
+    # 숙련도
+    cur_lv = _level_to_number(current.get("ai_level"))
+    prev_lv = _level_to_number(previous.get("ai_level"))
+    level_delta: int | None = None
+    if cur_lv is not None and prev_lv is not None:
+        level_delta = cur_lv - prev_lv
+
+    # 매물·목표는 집합 연산. 입력 순서 보존을 위해 list 로 변환.
+    cur_props = _split_multivalue(current.get("main_property"))
+    prev_props = _split_multivalue(previous.get("main_property"))
+    cur_props_set, prev_props_set = set(cur_props), set(prev_props)
+
+    cur_goals = _split_multivalue(current.get("ai_goals"))
+    prev_goals = _split_multivalue(previous.get("ai_goals"))
+    cur_goals_set, prev_goals_set = set(cur_goals), set(prev_goals)
+
+    return {
+        "days_between": days_between,
+        "level": {
+            "prev": prev_lv,
+            "current": cur_lv,
+            "delta": level_delta,
+            "prev_label": str(previous.get("ai_level") or "").strip(),
+            "current_label": str(current.get("ai_level") or "").strip(),
+        },
+        "properties": {
+            "added": [p for p in cur_props if p not in prev_props_set],
+            "removed": [p for p in prev_props if p not in cur_props_set],
+            "kept": [p for p in cur_props if p in prev_props_set],
+        },
+        "goals": {
+            "added": [g for g in cur_goals if g not in prev_goals_set],
+            "removed": [g for g in prev_goals if g not in cur_goals_set],
+            "kept": [g for g in cur_goals if g in prev_goals_set],
+        },
+    }
+
+
 def classify_property_track(main_property) -> str:
     """주력 매물 (list 또는 콤마 문자열) 에서 매물 트랙을 반환.
 
@@ -764,6 +855,83 @@ def _build_gmail_url(subject: str, body: str) -> str:
         f"https://mail.google.com/mail/?view=cm&fs=1"
         f"&to={CONSULT_EMAIL}&su={enc_subject}&body={enc_body}"
     )
+
+
+def render_comparison_card(comparison: dict, total_visits: int) -> None:
+    """결과 페이지 상단의 '이전 진단과 비교' 카드를 렌더링.
+
+    Args:
+        comparison: build_comparison() 의 반환값.
+        total_visits: 같은 이메일의 누적 진단 횟수 (현재 포함).
+    """
+    level = comparison["level"]
+    days = comparison["days_between"]
+    delta = level.get("delta")
+
+    # 헤드라인 — 가장 강한 시그널 우선 (숙련도 변화 > 매물 추가 > 목표 추가)
+    if delta is not None and delta > 0:
+        headline = f"🎉 한 단계씩 성장 중! 숙련도 **{delta}단계 상승**하셨습니다."
+        accent = "#16A34A"   # green
+    elif delta is not None and delta < 0:
+        headline = "🔁 다시 한 번 차근차근 — 직전보다 숙련도 응답을 보수적으로 잡으셨네요."
+        accent = "#0F3D77"   # primary
+    else:
+        headline = "🔁 꾸준히 진단받고 계시네요. 변화 흐름을 같이 살펴보세요."
+        accent = "#0F3D77"
+
+    sub = []
+    if days is not None:
+        sub.append(f"직전 진단으로부터 **{days}일** 경과")
+    sub.append(f"이 이메일로 **{total_visits}번째** 진단")
+    sub_line = " · ".join(sub)
+
+    st.markdown(
+        f"""
+        <div class="card accent" style="border-left-color:{accent};">
+          <h3 style="color:{accent};">{headline}</h3>
+          <p style="margin:0 0 6px 0; color:var(--sh-muted);">{sub_line}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # ── 변화 디테일 (숙련도·매물·목표) ──
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown("##### 📚 숙련도")
+        prev_lbl = level.get("prev_label") or "(이전 기록 없음)"
+        cur_lbl = level.get("current_label") or "(현재 기록 없음)"
+        if delta is None:
+            st.caption("비교 가능한 숫자 정보가 없습니다.")
+        elif delta > 0:
+            st.success(f"▲ +{delta}단계")
+        elif delta < 0:
+            st.warning(f"▼ {delta}단계")
+        else:
+            st.info("동일 단계 유지")
+        st.caption(f"이전: {prev_lbl}")
+        st.caption(f"현재: {cur_lbl}")
+
+    with col2:
+        st.markdown("##### 🏠 주력 매물 변화")
+        props = comparison["properties"]
+        if props["added"]:
+            st.success("**+ 추가**: " + ", ".join(props["added"]))
+        if props["removed"]:
+            st.caption("**− 제외**: " + ", ".join(props["removed"]))
+        if not props["added"] and not props["removed"]:
+            st.info(f"동일 유지 ({len(props['kept'])}종)")
+
+    with col3:
+        st.markdown("##### 🎯 AI 활용 목표 변화")
+        goals = comparison["goals"]
+        if goals["added"]:
+            st.success("**+ 추가**: " + ", ".join(goals["added"]))
+        if goals["removed"]:
+            st.caption("**− 제외**: " + ", ".join(goals["removed"]))
+        if not goals["added"] and not goals["removed"]:
+            st.info(f"동일 유지 ({len(goals['kept'])}종)")
 
 
 def render_selection_chips(
@@ -1249,6 +1417,10 @@ if submitted:
         for msg in errors:
             st.warning(f"⚠️ {msg}")
     else:
+        # 재진단 비교 — save_response 직전에 같은 이메일 이전 응답 받아둠
+        # (이후 all_responses 호출은 새 응답까지 포함되므로 사전 캐싱이 안전)
+        previous_responses = find_previous_responses(email.strip(), all_responses())
+
         new_id = save_response(
             business_name=business_name.strip(),
             user_name=user_name.strip(),
@@ -1287,6 +1459,17 @@ if submitted:
             custom_goals=custom_goals.strip(),
             ai_level=ai_level,
         )
+
+        # 재진단 비교 카드 — 같은 이메일 이전 응답이 있으면 자동 표시 (없으면 숨김)
+        if previous_responses:
+            current_payload = {
+                "submitted_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "ai_level": ai_level,
+                "main_property": main_property,
+                "ai_goals": ai_goals,
+            }
+            comparison_data = build_comparison(current_payload, previous_responses[0])
+            render_comparison_card(comparison_data, total_visits=len(previous_responses) + 1)
 
         # 진단 요약 — 칩 배지로 한눈에
         render_selection_chips(
