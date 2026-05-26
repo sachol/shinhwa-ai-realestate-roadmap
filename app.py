@@ -434,6 +434,65 @@ def _level_to_number(level_str: str) -> int | None:
 OWNER_EMAILS: tuple[str, ...] = ("sachol.cap@gmail.com", "sachol@kakao.com")
 TEST_KEYWORDS: tuple[str, ...] = ("TEST", "테스트", "알림테스트", "홍길동")
 
+# ── 강의반 자동 분류 (2026-05-26) ──────────────────────────────
+# 숙련도 5단계 → 3개 강의반으로 묶음 (현재 14명 unique 분포에 맞춰 설계)
+CLASS_INTRO = "AI 입문반"            # Lv 1~2 (입문 + 기초 ChatGPT)
+CLASS_BASIC = "AI 기본 활용반"       # Lv 3   (업무에 ChatGPT 활용 중)
+CLASS_ADVANCED = "AI 심화 자동화반"  # Lv 4~5 (능숙·전문가)
+CLASS_UNCLASSIFIED = "분류 불가"
+
+# 매물 트랙 (보조 컬럼) — 강의 콘텐츠 매칭용
+TRACK_APT = "아파트 트랙"           # 아파트·오피스텔 위주
+TRACK_NON_APT = "비아파트 트랙"     # 토지·상가·재개발 등
+TRACK_MIXED = "혼합 트랙"           # 둘 다
+TRACK_UNKNOWN = "미분류"
+
+APARTMENT_PROPERTIES: frozenset[str] = frozenset({"아파트", "오피스텔"})
+
+
+def classify_main_class(ai_level: str) -> str:
+    """숙련도 문자열에서 추천 강의반을 반환.
+
+    Args:
+        ai_level: 응답 시트의 ai_level 컬럼 값 (예: "2. 기초 — ChatGPT 사용").
+
+    Returns:
+        CLASS_INTRO / CLASS_BASIC / CLASS_ADVANCED / CLASS_UNCLASSIFIED.
+    """
+    level_num = _level_to_number(ai_level)
+    if level_num is None:
+        return CLASS_UNCLASSIFIED
+    if level_num <= 2:
+        return CLASS_INTRO
+    if level_num == 3:
+        return CLASS_BASIC
+    if level_num >= 4:
+        return CLASS_ADVANCED
+    return CLASS_UNCLASSIFIED
+
+
+def classify_property_track(main_property) -> str:
+    """주력 매물 (list 또는 콤마 문자열) 에서 매물 트랙을 반환.
+
+    Args:
+        main_property: 시트의 main_property 컬럼 (SQLite list 또는 콤마 문자열).
+
+    Returns:
+        TRACK_APT / TRACK_NON_APT / TRACK_MIXED / TRACK_UNKNOWN.
+    """
+    props = _split_multivalue(main_property)
+    if not props:
+        return TRACK_UNKNOWN
+    has_apt = any(p in APARTMENT_PROPERTIES for p in props)
+    has_non_apt = any(p not in APARTMENT_PROPERTIES for p in props)
+    if has_apt and has_non_apt:
+        return TRACK_MIXED
+    if has_apt:
+        return TRACK_APT
+    if has_non_apt:
+        return TRACK_NON_APT
+    return TRACK_UNKNOWN
+
 
 def _filter_rows(
     rows: list[dict],
@@ -521,6 +580,9 @@ def render_admin_dashboard(rows: list[dict]) -> None:
     df["_submitted_dt"] = pd.to_datetime(
         df.get("submitted_at", ""), errors="coerce"
     )
+    # 강의반·매물 트랙 자동 분류
+    df["_main_class"] = df.get("ai_level", "").apply(classify_main_class)
+    df["_property_track"] = df.get("main_property", "").apply(classify_property_track)
 
     # ── KPI 계산 ──
     total = len(df)
@@ -535,6 +597,11 @@ def render_admin_dashboard(rows: list[dict]) -> None:
     top_property = Counter(all_props).most_common(1)
     top_prop_label = top_property[0][0] if top_property else "—"
 
+    class_counts = df["_main_class"].value_counts()
+    intro_n = int(class_counts.get(CLASS_INTRO, 0))
+    basic_n = int(class_counts.get(CLASS_BASIC, 0))
+    advanced_n = int(class_counts.get(CLASS_ADVANCED, 0))
+
     # ── KPI 타일 ──
     st.markdown("### 📊 핵심 지표")
     k1, k2, k3, k4 = st.columns(4)
@@ -542,6 +609,13 @@ def render_admin_dashboard(rows: list[dict]) -> None:
     k2.metric("최근 7일", f"{recent_week:,} 건")
     k3.metric("평균 숙련도", avg_level_str)
     k4.metric("Top 매물", top_prop_label)
+
+    # ── 강의반 KPI 타일 (강사 배정 의사결정용) ──
+    st.markdown("#### 🎓 추천 강의반 분포")
+    g1, g2, g3 = st.columns(3)
+    g1.metric(CLASS_INTRO, f"{intro_n:,} 명")
+    g2.metric(CLASS_BASIC, f"{basic_n:,} 명")
+    g3.metric(CLASS_ADVANCED, f"{advanced_n:,} 명")
 
     st.divider()
 
@@ -607,6 +681,37 @@ def render_admin_dashboard(rows: list[dict]) -> None:
             st.line_chart(daily, height=320, color="#0F3D77")
         else:
             st.caption("_(데이터 부족)_")
+
+    st.divider()
+
+    # ── 차트 행: 강의반 분포 + 매물 트랙 분포 ──
+    c5, c6 = st.columns(2)
+    with c5:
+        st.markdown("#### 🎓 추천 강의반 분포")
+        class_ordered = [CLASS_INTRO, CLASS_BASIC, CLASS_ADVANCED]
+        class_series = df["_main_class"]
+        class_df_data = [
+            (name, int((class_series == name).sum())) for name in class_ordered
+        ]
+        # 분류 불가도 1개 이상이면 추가
+        unclassified_n = int((class_series == CLASS_UNCLASSIFIED).sum())
+        if unclassified_n > 0:
+            class_df_data.append((CLASS_UNCLASSIFIED, unclassified_n))
+        class_df = pd.DataFrame(class_df_data, columns=["강의반", "인원"]).set_index("강의반")
+        st.bar_chart(class_df, height=320, color="#FFB400")
+
+    with c6:
+        st.markdown("#### 🏘️ 매물 트랙 분포")
+        track_ordered = [TRACK_APT, TRACK_NON_APT, TRACK_MIXED]
+        track_series = df["_property_track"]
+        track_df_data = [
+            (name, int((track_series == name).sum())) for name in track_ordered
+        ]
+        unknown_n = int((track_series == TRACK_UNKNOWN).sum())
+        if unknown_n > 0:
+            track_df_data.append((TRACK_UNKNOWN, unknown_n))
+        track_df = pd.DataFrame(track_df_data, columns=["트랙", "인원"]).set_index("트랙")
+        st.bar_chart(track_df, height=320, color="#0F3D77")
 
     st.divider()
 
@@ -940,10 +1045,13 @@ if is_admin_user:
         st.info("필터 조건을 만족하는 응답이 없습니다.")
     else:
         df = pd.DataFrame(filtered_rows)
+        # 자동 분류 컬럼 추가 (강사 강의반 배정 의사결정용)
+        df["추천 강의반"] = df.get("ai_level", "").apply(classify_main_class)
+        df["매물 트랙"] = df.get("main_property", "").apply(classify_property_track)
         preferred = [
             "id", "submitted_at", "business_name", "user_name", "email",
-            "ai_level", "main_property", "custom_property",
-            "ai_goals", "custom_goals",
+            "ai_level", "추천 강의반", "main_property", "매물 트랙",
+            "custom_property", "ai_goals", "custom_goals",
         ]
         cols = [c for c in preferred if c in df.columns] + \
                [c for c in df.columns if c not in preferred]
@@ -952,7 +1060,7 @@ if is_admin_user:
 
         csv = df.to_csv(index=False).encode("utf-8-sig")
         st.download_button(
-            "📥 전체 응답 CSV 다운로드 (필터 반영)",
+            "📥 전체 응답 CSV 다운로드 (필터·분류 반영)",
             data=csv,
             file_name=f"shinhwa_responses_{datetime.now():%Y%m%d_%H%M}.csv",
             mime="text/csv",
