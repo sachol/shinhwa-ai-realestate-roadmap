@@ -656,6 +656,126 @@ def _filter_rows(
     return working, excluded
 
 
+def compute_repeat_stats(rows: list[dict]) -> dict:
+    """이메일별로 그룹핑하여 재진단 분석 통계를 산출.
+
+    Args:
+        rows: 응답 리스트 (보통 필터된 상태). 빈 입력도 안전 처리.
+
+    Returns:
+        {
+          "total_unique_emails": int,
+          "repeat_users": list[dict],         # 응답 ≥ 2인 사용자들의 요약 dict 목록
+          "repeat_rate": float,               # 0~1, 재진단자 / 전체 unique
+          "avg_repeat_count": float,          # 재진단자 평균 응답 수
+          "avg_level_change": float | None,   # 재진단자 (마지막 - 첫) 숙련도 평균
+          "max_level_change": int | None,
+          "level_change_distribution": dict,  # {delta_int: 인원}
+          "top_growers": list[dict],          # level_change 내림차순 상위 5명
+        }
+
+    repeat_users 각 dict 형태:
+        {
+          "email": str,
+          "first": dict (원본 row),
+          "last": dict (원본 row),
+          "repeat_count": int,
+          "level_change": int | None,
+          "first_level_label": str,
+          "last_level_label": str,
+          "user_name": str,
+          "business_name": str,
+        }
+    """
+    empty = {
+        "total_unique_emails": 0,
+        "repeat_users": [],
+        "repeat_rate": 0.0,
+        "avg_repeat_count": 0.0,
+        "avg_level_change": None,
+        "max_level_change": None,
+        "level_change_distribution": {},
+        "top_growers": [],
+    }
+    if not rows:
+        return empty
+
+    # 이메일별 그룹핑
+    by_email: dict[str, list[dict]] = {}
+    for r in rows:
+        email = str(r.get("email") or "").lower().strip()
+        if not email:
+            continue
+        by_email.setdefault(email, []).append(r)
+
+    total_unique_emails = len(by_email)
+    if total_unique_emails == 0:
+        return empty
+
+    # 각 그룹에서 첫·마지막 응답 추출 (submitted_at 오름차순)
+    repeat_users: list[dict] = []
+    for email, group in by_email.items():
+        if len(group) < 2:
+            continue
+        parsed_dts = pd.to_datetime(
+            [r.get("submitted_at") for r in group], errors="coerce"
+        )
+        pairs = list(zip(parsed_dts, group))
+        pairs.sort(key=lambda p: p[0] if pd.notna(p[0]) else pd.Timestamp.min)
+        first_row = pairs[0][1]
+        last_row = pairs[-1][1]
+
+        first_lv = _level_to_number(first_row.get("ai_level"))
+        last_lv = _level_to_number(last_row.get("ai_level"))
+        level_change: int | None = None
+        if first_lv is not None and last_lv is not None:
+            level_change = last_lv - first_lv
+
+        repeat_users.append({
+            "email": email,
+            "first": first_row,
+            "last": last_row,
+            "repeat_count": len(group),
+            "level_change": level_change,
+            "first_level_label": str(first_row.get("ai_level") or "").strip(),
+            "last_level_label": str(last_row.get("ai_level") or "").strip(),
+            "user_name": str(last_row.get("user_name") or "").strip(),
+            "business_name": str(last_row.get("business_name") or "").strip(),
+        })
+
+    repeat_count = len(repeat_users)
+    repeat_rate = repeat_count / total_unique_emails if total_unique_emails else 0.0
+    avg_repeat_count = (
+        sum(u["repeat_count"] for u in repeat_users) / repeat_count
+        if repeat_count else 0.0
+    )
+
+    changes = [u["level_change"] for u in repeat_users if u["level_change"] is not None]
+    avg_level_change = sum(changes) / len(changes) if changes else None
+    max_level_change = max(changes) if changes else None
+
+    distribution: dict[int, int] = {}
+    for c in changes:
+        distribution[c] = distribution.get(c, 0) + 1
+
+    top_growers = sorted(
+        [u for u in repeat_users if u["level_change"] is not None],
+        key=lambda u: u["level_change"],
+        reverse=True,
+    )[:5]
+
+    return {
+        "total_unique_emails": total_unique_emails,
+        "repeat_users": repeat_users,
+        "repeat_rate": repeat_rate,
+        "avg_repeat_count": avg_repeat_count,
+        "avg_level_change": avg_level_change,
+        "max_level_change": max_level_change,
+        "level_change_distribution": distribution,
+        "top_growers": top_growers,
+    }
+
+
 def render_admin_dashboard(rows: list[dict]) -> None:
     """관리자 대시보드 — KPI 4타일 + 4개 차트."""
     if not rows:
@@ -806,6 +926,93 @@ def render_admin_dashboard(rows: list[dict]) -> None:
 
     st.divider()
 
+    # ── 재진단 분석 섹션 (2026-05-27 추가) ──
+    # 같은 이메일로 2회 이상 진단받은 사용자의 성장·변화를 한눈에
+    st.markdown("### 🔁 재진단 분석")
+    st.caption(
+        "같은 이메일로 2회 이상 진단받은 사용자들의 성장·변화 현황 "
+        "(첫 진단 → 가장 최근 진단 비교 기준)"
+    )
+
+    stats = compute_repeat_stats(rows)
+    repeat_n = len(stats["repeat_users"])
+
+    if repeat_n == 0:
+        st.info(
+            "아직 재진단 사례가 없습니다. "
+            "이메일별 진단이 2회 이상 누적되면 자동 분석됩니다."
+        )
+        return
+
+    # KPI 4타일
+    rk1, rk2, rk3, rk4 = st.columns(4)
+    rk1.metric(
+        "재진단자",
+        f"{repeat_n}명",
+        delta=f"전체 {stats['total_unique_emails']}명 중 {stats['repeat_rate']*100:.0f}%",
+        delta_color="off",
+    )
+    rk2.metric(
+        "평균 재진단 횟수",
+        f"{stats['avg_repeat_count']:.1f}회",
+    )
+    avg_change = stats["avg_level_change"]
+    if avg_change is not None:
+        sign = "+" if avg_change >= 0 else ""
+        rk3.metric("평균 숙련도 변화", f"{sign}{avg_change:.1f} 단계")
+    else:
+        rk3.metric("평균 숙련도 변화", "—")
+    max_change = stats["max_level_change"]
+    if max_change is not None:
+        sign = "+" if max_change >= 0 else ""
+        rk4.metric("최고 성장", f"{sign}{max_change} 단계")
+    else:
+        rk4.metric("최고 성장", "—")
+
+    st.markdown("")
+
+    rc1, rc2 = st.columns([1, 1])
+
+    with rc1:
+        st.markdown("#### 📊 숙련도 변화 분포")
+        dist = stats["level_change_distribution"]
+        if dist:
+            dist_keys = sorted(dist.keys())
+            dist_data = [
+                (f"{'+' if k > 0 else ''}{k}단계", dist[k]) for k in dist_keys
+            ]
+            dist_df = pd.DataFrame(dist_data, columns=["변화", "인원"]).set_index("변화")
+            st.bar_chart(dist_df, height=320, color="#16A34A")
+        else:
+            st.caption("_(분포 데이터 부족 — 숙련도 응답이 숫자로 파싱되지 않음)_")
+
+    with rc2:
+        st.markdown("#### 🏆 Top 5 성장자")
+        top_growers = stats["top_growers"]
+        if top_growers:
+            top_data = []
+            for i, u in enumerate(top_growers, 1):
+                change = u["level_change"]
+                if change > 0:
+                    change_str = f"▲ +{change}"
+                elif change < 0:
+                    change_str = f"▼ {change}"
+                else:
+                    change_str = "= 0"
+                top_data.append({
+                    "순위": i,
+                    "사용자": f"{u['user_name']} ({u['business_name']})",
+                    "이메일": u["email"],
+                    "숙련도 변화": change_str,
+                    "재진단 횟수": f"{u['repeat_count']}회",
+                })
+            top_df = pd.DataFrame(top_data)
+            st.dataframe(top_df, use_container_width=True, hide_index=True)
+        else:
+            st.caption("_(성장 데이터 부족)_")
+
+    st.divider()
+
 
 def _build_consult_message(
     business_name: str,
@@ -855,6 +1062,46 @@ def _build_gmail_url(subject: str, body: str) -> str:
         f"https://mail.google.com/mail/?view=cm&fs=1"
         f"&to={CONSULT_EMAIL}&su={enc_subject}&body={enc_body}"
     )
+
+
+DIFF_INLINE_THRESHOLD = 4  # 추가/제외 항목 4개 이하면 인라인, 5개 이상이면 expander 로 접음
+
+
+def _render_diff_block(
+    added: list[str],
+    removed: list[str],
+    kept_count: int,
+    unit: str,
+) -> None:
+    """비교 카드 컬럼의 '추가/제외/유지' 블록 렌더링.
+
+    항목이 DIFF_INLINE_THRESHOLD 이하면 인라인 (st.success/caption),
+    초과 시 st.expander 로 접어 헤더에 개수만 표시 (대표님 명시 요청 2026-05-26).
+    """
+    if added:
+        if len(added) <= DIFF_INLINE_THRESHOLD:
+            st.success(f"**+ 추가 ({len(added)})**: " + ", ".join(added))
+        else:
+            with st.expander(
+                f"✅ + 추가 ({len(added)}{unit}) — 펼쳐 보기",
+                expanded=False,
+            ):
+                for item in added:
+                    st.markdown(f"- {item}")
+
+    if removed:
+        if len(removed) <= DIFF_INLINE_THRESHOLD:
+            st.caption(f"**− 제외 ({len(removed)})**: " + ", ".join(removed))
+        else:
+            with st.expander(
+                f"➖ − 제외 ({len(removed)}{unit}) — 펼쳐 보기",
+                expanded=False,
+            ):
+                for item in removed:
+                    st.caption(f"- {item}")
+
+    if not added and not removed:
+        st.info(f"동일 유지 ({kept_count}{unit})")
 
 
 def render_comparison_card(comparison: dict, total_visits: int) -> None:
@@ -916,22 +1163,22 @@ def render_comparison_card(comparison: dict, total_visits: int) -> None:
     with col2:
         st.markdown("##### 🏠 주력 매물 변화")
         props = comparison["properties"]
-        if props["added"]:
-            st.success("**+ 추가**: " + ", ".join(props["added"]))
-        if props["removed"]:
-            st.caption("**− 제외**: " + ", ".join(props["removed"]))
-        if not props["added"] and not props["removed"]:
-            st.info(f"동일 유지 ({len(props['kept'])}종)")
+        _render_diff_block(
+            added=props["added"],
+            removed=props["removed"],
+            kept_count=len(props["kept"]),
+            unit="종",
+        )
 
     with col3:
         st.markdown("##### 🎯 AI 활용 목표 변화")
         goals = comparison["goals"]
-        if goals["added"]:
-            st.success("**+ 추가**: " + ", ".join(goals["added"]))
-        if goals["removed"]:
-            st.caption("**− 제외**: " + ", ".join(goals["removed"]))
-        if not goals["added"] and not goals["removed"]:
-            st.info(f"동일 유지 ({len(goals['kept'])}종)")
+        _render_diff_block(
+            added=goals["added"],
+            removed=goals["removed"],
+            kept_count=len(goals["kept"]),
+            unit="개",
+        )
 
 
 def render_selection_chips(
@@ -1460,7 +1707,10 @@ if submitted:
             ai_level=ai_level,
         )
 
-        # 재진단 비교 카드 — 같은 이메일 이전 응답이 있으면 자동 표시 (없으면 숨김)
+        # 재진단 비교 — 같은 이메일 이전 응답이 있으면 화면 카드 + PDF 섹션 둘 다 생성
+        # (첫 진단자는 둘 다 생략, 기존 흐름 100% 유지)
+        comparison_for_pdf: dict | None = None
+        total_visits_for_pdf: int | None = None
         if previous_responses:
             current_payload = {
                 "submitted_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -1469,7 +1719,10 @@ if submitted:
                 "ai_goals": ai_goals,
             }
             comparison_data = build_comparison(current_payload, previous_responses[0])
-            render_comparison_card(comparison_data, total_visits=len(previous_responses) + 1)
+            total_visits = len(previous_responses) + 1
+            render_comparison_card(comparison_data, total_visits=total_visits)
+            comparison_for_pdf = comparison_data
+            total_visits_for_pdf = total_visits
 
         # 진단 요약 — 칩 배지로 한눈에
         render_selection_chips(
@@ -1486,7 +1739,13 @@ if submitted:
             st.markdown(roadmap_md)
 
         with st.spinner("PDF 보고서를 만들고 있습니다..."):
-            pdf_bytes = build_pdf(roadmap_md)
+            # 재진단자에겐 디자인된 비교 페이지를 첫 페이지에 자동 렌더링 (build_pdf 가 처리)
+            # 첫 진단자는 comparison_for_pdf=None 이라 기존 PDF 와 100% 동일
+            pdf_bytes = build_pdf(
+                roadmap_md,
+                comparison=comparison_for_pdf,
+                total_visits=total_visits_for_pdf,
+            )
 
         ts = datetime.now().strftime("%Y%m%d_%H%M")
         safe_biz = "".join(c for c in business_name if c.isalnum() or "가" <= c <= "힣")[:20]
