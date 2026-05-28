@@ -42,6 +42,7 @@ from roadmap_logic import (
     LEVEL_OPTIONS,
 )
 from pdf_export import build_pdf
+from llm_insights import generate_custom_insights, is_llm_active
 
 init_storage()
 
@@ -1181,6 +1182,64 @@ def render_comparison_card(comparison: dict, total_visits: int) -> None:
         )
 
 
+def render_llm_insights_card(insights: dict, user_name: str) -> None:
+    """LLM 으로 추출된 자유 입력 인사이트를 결과 페이지에 카드로 표시.
+
+    Args:
+        insights: generate_custom_insights() 의 반환값 (None 이면 호출되지 않음).
+        user_name: 사용자 성함 (헤드라인 인사용).
+    """
+    summary = insights.get("summary") or ""
+    pains = insights.get("key_pains") or []
+    tools = insights.get("tool_recommendations") or []
+
+    if not summary and not pains and not tools:
+        return  # 정말 비어있으면 카드 미렌더링
+
+    # 헤드라인 카드 (AI 코치 톤)
+    st.markdown(
+        f"""
+        <div class="card accent" style="border-left-color:#FFB400;">
+          <h3 style="color:#0F3D77; display:flex; align-items:center; gap:8px;">
+            🤖 AI 코치의 맞춤 분석
+          </h3>
+          <p style="margin:0; font-size:0.98rem; line-height:1.65; color:var(--sh-card-text);">
+            {summary}
+          </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if pains or tools:
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("##### 🎯 핵심 페인 포인트")
+            if pains:
+                for p in pains:
+                    st.markdown(f"- {p}")
+            else:
+                st.caption("_(특별히 추출된 페인 없음)_")
+
+        with col2:
+            st.markdown("##### 🛠️ 맞춤 추천")
+            if tools:
+                for t in tools:
+                    tool_name = t.get("tool", "")
+                    reason = t.get("reason", "")
+                    if tool_name:
+                        st.markdown(f"- **{tool_name}** — {reason}")
+            else:
+                st.caption("_(맞춤 추천 없음)_")
+
+    # 안내 캡션
+    st.caption(
+        "💡 위 분석은 입력하신 **기타 매물·기타 AI 목표** 자유 입력을 기반으로 "
+        "AI(Claude) 가 생성한 개인화 코멘트입니다. 참고용이며, 일반 로드맵은 아래에서 이어집니다."
+    )
+
+
 def render_selection_chips(
     business_name: str,
     user_name: str,
@@ -1734,6 +1793,22 @@ if submitted:
             ai_goals=ai_goals,
             custom_goals=custom_goals.strip(),
         )
+
+        # AI 코치의 맞춤 분석 — 자유 입력(custom_property·custom_goals)이 있고 API 키 설정 시에만
+        # API 미설정·실패·자유 입력 빈 값일 땐 silent fallback (기존 흐름 100% 유지)
+        if is_llm_active() and (custom_property.strip() or custom_goals.strip()):
+            with st.spinner("🤖 AI 코치가 자유 입력을 분석하고 있습니다..."):
+                llm_insights = generate_custom_insights(
+                    business_name=business_name.strip(),
+                    user_name=user_name.strip(),
+                    main_property=main_property,
+                    custom_property=custom_property.strip(),
+                    ai_goals=ai_goals,
+                    custom_goals=custom_goals.strip(),
+                    ai_level=ai_level,
+                )
+            if llm_insights:
+                render_llm_insights_card(llm_insights, user_name.strip())
 
         with st.container(border=True):
             st.markdown(roadmap_md)
